@@ -5,26 +5,24 @@ import { Pool } from "pg";
 
 const globalForPrisma = globalThis as unknown as {
   prisma: PrismaClient | undefined;
-  pool: Pool | undefined;
 };
 
-const pool =
-  globalForPrisma.pool ??
-  new Pool({
-    connectionString: process.env.DATABASE_URL,
-  });
+function getPrismaClient(): PrismaClient {
+  const connectionString = process.env.DATABASE_URL;
 
-if (process.env.NODE_ENV !== "production") {
-  globalForPrisma.pool = pool;
+  // Se a URL não estiver disponível na etapa de compilação estática,
+  // faz o fallback seguro para não quebrar a avaliação do módulo no Vercel
+  if (!connectionString) {
+    return new PrismaClient();
+  }
+
+  const pool = new Pool({ connectionString });
+  const adapter = new PrismaPg(pool);
+
+  return new PrismaClient({ adapter });
 }
 
-const adapter = new PrismaPg(pool);
-
-export const prisma =
-  globalForPrisma.prisma ??
-  new PrismaClient({
-    adapter,
-  });
+export const prisma = globalForPrisma.prisma ?? getPrismaClient();
 
 if (process.env.NODE_ENV !== "production") {
   globalForPrisma.prisma = prisma;
