@@ -20,7 +20,8 @@ export async function GET() {
       orderBy: { createdAt: 'desc' }
     });
 
-    const formattedOrders = dbOrders.map(order => serializeOrder(order));
+    // CORREÇÃO: Adicionado (order: any) para resolver o erro de "implicit any"
+    const formattedOrders = dbOrders.map((order: any) => serializeOrder(order));
 
     return NextResponse.json({ orders: formattedOrders });
   } catch (error) {
