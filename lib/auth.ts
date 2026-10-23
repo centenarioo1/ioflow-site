@@ -1,7 +1,17 @@
 import crypto from 'crypto';
 import { cookies } from 'next/headers';
 import { prisma } from '@/lib/prisma';
-import type { Role, User } from '@prisma/client';
+
+// Tipagem local para evitar dependência de exportação estrita do @prisma/client no Vercel
+export type Role = 'ADMIN' | 'USER' | string;
+
+export interface User {
+  id: string;
+  nome: string;
+  email: string;
+  role: Role;
+  [key: string]: any;
+}
 
 const SECRET = process.env.AUTH_SECRET || 'bioflow-dev-secret-change-in-prod-123456';
 export const SESSION_COOKIE = 'bioflow_session';
@@ -72,7 +82,7 @@ export function toPublicUser(user: Pick<User, 'id' | 'nome' | 'email' | 'role'>)
 export async function getUsuarioLogado(): Promise<AuthUser | null> {
   const userId = await getUserIdFromCookies();
   if (!userId) return null;
-  const user = await prisma.user.findUnique({ where: { id: userId } });
+  const user = await (prisma as any).user.findUnique({ where: { id: userId } });
   if (!user) return null;
   return toAuthUser(user);
 }
