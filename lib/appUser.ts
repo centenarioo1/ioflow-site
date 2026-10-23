@@ -1,8 +1,18 @@
 import { prisma } from '@/lib/prisma';
-import type { User } from '@prisma/client';
 
-// Define o tipo Role localmente para evitar erro de exportação do @prisma/client
+// Tipagem local para evitar dependência de exportação estrita do @prisma/client no Vercel
 export type Role = 'ADMIN' | 'USER' | string;
+
+export interface User {
+  id: string;
+  nome?: string | null;
+  email: string;
+  password?: string | null;
+  role?: string | null;
+  createdAt?: Date | string;
+  updatedAt?: Date | string;
+  [key: string]: any;
+}
 
 const PASSWORD_PLACEHOLDER = 'SUPABASE_AUTH';
 
@@ -21,31 +31,28 @@ export async function upsertAppUser(params: {
   const role = resolveRole(email);
 
   try {
-    return await prisma.user.upsert({
+    return await (prisma as any).user.upsert({
       where: { id: params.id },
       create: {
         id: params.id,
         nome,
         email,
         password: PASSWORD_PLACEHOLDER,
-        // @ts-ignore: Ignorando checagem estrita de tipo enum do Prisma no role
         role,
       },
       update: {
         nome,
         email,
-        // @ts-ignore: Ignorando checagem estrita de tipo enum do Prisma no role
         ...(role === 'ADMIN' ? { role: 'ADMIN' } : {}),
       },
     });
   } catch (err) {
-    const existing = await prisma.user.findUnique({ where: { email } });
+    const existing = await (prisma as any).user.findUnique({ where: { email } });
     if (existing) {
-      return prisma.user.update({
+      return (prisma as any).user.update({
         where: { email },
         data: {
           nome,
-          // @ts-ignore: Ignorando checagem estrita de tipo enum do Prisma no role
           ...(role === 'ADMIN' ? { role: 'ADMIN' } : {}),
         },
       });
