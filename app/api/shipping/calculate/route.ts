@@ -1,3 +1,4 @@
+// app/api/shipping/calculate/route.ts
 import { NextResponse } from 'next/server';
 
 interface ProdutoMedidas {
@@ -7,125 +8,135 @@ interface ProdutoMedidas {
   alturaCm: number;
 }
 
+// Dicionário de peso e dimensões dos produtos reais da Bioflow
 const DICIONARIO_PRODUTOS: Record<string, ProdutoMedidas> = {
   "58206317707": {
-    pesoKg: 0.35, // 350g convertido para kg
+    pesoKg: 0.35, // 350g
     comprimentoCm: 15,
     larguraCm: 15,
-    alturaCm: 10
-  }
+    alturaCm: 10,
+  },
 };
 
 export async function POST(req: Request) {
   try {
     const { cepDestino, itens } = await req.json();
 
-    if (!cepDestino || !itens || itens.length === 0) {
-      return NextResponse.json({ error: 'CEP de destino e itens são obrigatórios.' }, { status: 400 });
+    if (!cepDestino || !itens || !Array.isArray(itens) || itens.length === 0) {
+      return NextResponse.json(
+        { error: 'CEP de destino e itens válidos são obrigatórios.' },
+        { status: 400 }
+      );
     }
 
     const token = process.env.MELHOR_ENVIO_TOKEN;
-    const apiUrl = process.env.MELHOR_ENVIO_API_URL || 'https://sandbox.melhorenvio.com.br';
+    // Trata a URL limpando barras finais
+    const baseUrl = (process.env.MELHOR_ENVIO_API_URL || 'https://melhorenvio.com.br/').replace(/\/+$/, '');
 
     if (!token) {
-      return NextResponse.json({ error: 'Token de frete não configurado no servidor.' }, { status: 500 });
+      console.error('❌ [Frete API] MELHOR_ENVIO_TOKEN não foi configurado nas variáveis de ambiente.');
+      return NextResponse.json(
+        { error: 'Token de frete não configurado no servidor.' },
+        { status: 500 }
+      );
     }
 
-    const cepOrigem = '16603268'; 
+    const cepOrigem = '16603268'; // CEP de Origem (Pirajuí - SP)
+    const cepDestinoLimpo = String(cepDestino).replace(/\D/g, '');
 
-    let pesoTotalCaixa = 0;
-    let volumeTotalCc = 0;
-    let valorTotalSeguro = 0;
+    // Mapeia os itens do carrinho enviando dimensões reais para a API
+    const productsPayload = itens.map((it: any) => {
+      const productId = String(it.productId || it.id || '');
+      const cadastroReal = DICIONARIO_PRODUTOS[productId];
 
-    itens.forEach((it: any) => {
-      const cadastroReal = DICIONARIO_PRODUTOS[it.productId];
-      let pesoItem = 1.0;
-      let comp = 15;
-      let larg = 15;
-      let alt = 10;
+      let weight = 0.35;
+      let width = 15;
+      let height = 10;
+      let length = 15;
 
       if (cadastroReal) {
-        pesoItem = cadastroReal.pesoKg;
-        comp = cadastroReal.comprimentoCm;
-        larg = cadastroReal.larguraCm;
-        alt = cadastroReal.alturaCm;
+        weight = cadastroReal.pesoKg;
+        width = cadastroReal.larguraCm;
+        height = cadastroReal.alturaCm;
+        length = cadastroReal.comprimentoCm;
       } else {
-        let pesoEnviado = it.weight || 1.0;
-        if (pesoEnviado > 15) {
-          pesoEnviado = pesoEnviado / 1000;
-        }
-        pesoItem = pesoEnviado;
-
-        if (pesoItem <= 0.5) {
-          comp = 15; larg = 12; alt = 8;
-        } else if (pesoItem <= 1.5) {
-          comp = 20; larg = 15; alt = 12;
-        } else {
-          comp = 25; larg = 20; alt = 15;
-        }
+        let pesoEnviado = Number(it.weight || 0.35);
+        if (pesoEnviado > 15) pesoEnviado = pesoEnviado / 1000;
+        weight = Math.max(0.1, pesoEnviado);
       }
 
-      const qtd = it.quantity || 1;
-      pesoTotalCaixa += (pesoItem * qtd);
-      valorTotalSeguro += ((it.preco || 30) * qtd);
-      volumeTotalCc += ((comp * larg * alt) * qtd);
-    });
+      const quantity = Number(it.quantity || it.qtd || 1);
+      const unitValue = Number(it.preco || it.price || 30);
 
-    const dimensaoAproximada = Math.max(15, Math.ceil(Math.cbrt(volumeTotalCc)));
+      return {
+        id: productId,
+        width,
+        height,
+        length,
+        weight,
+        insurance_value: unitValue,
+        quantity,
+      };
+    });
 
     const bodyPayload = {
       from: { postal_code: cepOrigem },
-      to: { postal_code: cepDestino },
-      volumes: [
-        {
-          height: Math.min(dimensaoAproximada, 105),
-          width: Math.min(dimensaoAproximada, 105),
-          length: Math.min(dimensaoAproximada, 105),
-          weight: Math.min(pesoTotalCaixa, 30.0),
-          insurance_value: valorTotalSeguro
-        }
-      ]
+      to: { postal_code: cepDestinoLimpo },
+      products: productsPayload,
     };
 
-    const response = await fetch(`${apiUrl}/api/v2/me/shipment/calculate`, {
+    // Monta a URL garantindo que /api/v2 não seja duplicado
+    const targetUrl = baseUrl.includes('/api/v2')
+      ? `${baseUrl}/me/shipment/calculate`
+      : `${baseUrl}/api/v2/me/shipment/calculate`;
+
+    console.log('🔵 [Frete API] Consultando no Melhor Envio:', { targetUrl, cepOrigem, cepDestinoLimpo });
+
+    const response = await fetch(targetUrl, {
       method: 'POST',
       headers: {
         'Accept': 'application/json',
         'Content-Type': 'application/json',
         'Authorization': `Bearer ${token}`,
-        'User-Agent': 'BioFlow App (contato@bioflow.com.br)'
+        'User-Agent': 'BioFlow App (contato@bioflow.com.br)',
       },
-      body: JSON.stringify(bodyPayload)
+      body: JSON.stringify(bodyPayload),
     });
 
     if (!response.ok) {
       const errorText = await response.text();
-      console.error(`❌ [Melhor Envio Sandbox] Erro na API (${response.status}):`, errorText);
-      return NextResponse.json({ error: 'Erro de resposta da transportadora.' }, { status: response.status });
+      console.error(`❌ [Melhor Envio] Erro HTTP ${response.status}:`, errorText);
+      return NextResponse.json(
+        { error: `Erro na API do Melhor Envio: ${response.statusText}` },
+        { status: response.status }
+      );
     }
 
     const opcoesDeFrete = await response.json();
 
-    // 🔍 LINHA DE DIAGNÓSTICO: Mostra no seu terminal CMD o que o Sandbox realmente devolveu!
-    console.log('🔵 [Sandbox] Transportadoras retornadas pela API:', JSON.stringify(opcoesDeFrete, null, 2));
+    if (!Array.isArray(opcoesDeFrete)) {
+      console.error('❌ [Melhor Envio] Resposta da API não veio em formato de lista:', opcoesDeFrete);
+      return NextResponse.json({ opcoes: [] });
+    }
 
+    // Filtra opções válidas com preço real
     const opcoesValidas = opcoesDeFrete
       .filter((opcao: any) => !opcao.error && opcao.price)
       .map((opcao: any) => ({
-        id: opcao.id,
-        nome: `${opcao.company.name} (${opcao.name})`,
+        id: String(opcao.id),
+        nome: `${opcao.company?.name || 'Transportadora'} (${opcao.name})`,
         valor: parseFloat(opcao.price),
-        prazo: opcao.delivery_time
+        prazo: opcao.custom_delivery_time || opcao.delivery_time || 5,
+        empresa: opcao.company?.name,
       }));
-
-    if (opcoesValidas.length === 0) {
-      return NextResponse.json({ error: 'Nenhum serviço de entrega disponível no Sandbox para este CEP.' }, { status: 404 });
-    }
 
     return NextResponse.json({ opcoes: opcoesValidas });
 
-  } catch (error) {
-    console.error('❌ Erro crítico no cálculo de frete:', error);
-    return NextResponse.json({ error: 'Erro interno no servidor ao processar o frete.' }, { status: 500 });
+  } catch (err: any) {
+    console.error('❌ [Frete API] Erro interno no processamento:', err);
+    return NextResponse.json(
+      { error: 'Erro interno ao calcular frete.' },
+      { status: 500 }
+    );
   }
 }
