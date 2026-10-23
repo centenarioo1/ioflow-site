@@ -28,9 +28,14 @@ import SiteFooter from '@/components/SiteFooter';
 import TrustBar from '@/components/TrustBar';
 import WhatsAppButton from '@/components/WhatsAppButton';
 
-const nutrientes = produtos.filter((p) => p.categoria === 'nutriente');
-const solos = produtos.filter((p) => p.categoria === 'solo' || p.categoria === 'substrato');
-const emendas = produtos.filter((p) => p.categoria === 'emenda');
+type Produto = {
+  categoria: string;
+  [key: string]: any; // Permite outras propriedades (id, nome, etc)
+};
+
+const nutrientes = (produtos as Produto[]).filter((p) => p.categoria === 'nutriente');
+const solos = (produtos as Produto[]).filter((p) => p.categoria === 'solo' || p.categoria === 'substrato');
+const emendas = (produtos as Produto[]).filter((p) => p.categoria === 'emenda');
 
 const faqItems = [
   { 
