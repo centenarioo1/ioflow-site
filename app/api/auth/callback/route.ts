@@ -5,8 +5,13 @@ import { prisma } from '@/lib/prisma';
 import crypto from 'crypto';
 import { cookies } from 'next/headers';
 
+// 🚨 OBRIGATÓRIO no Next.js App Router:
+// Força esta rota a ser tratada como 100% dinâmica no servidor,
+// impedindo que a Vercel tente pré-renderizá-la no "npm run build".
+export const dynamic = 'force-dynamic';
+
 const SECRET = process.env.AUTH_SECRET || 'bioflow-dev-secret-change-in-prod-123456';
-const SESSION_COOKIE = 'bioflow_session'; // Nome oficial do cookie [2]
+const SESSION_COOKIE = 'bioflow_session';
 
 export async function GET(request: Request) {
   const requestUrl = new URL(request.url);
@@ -35,7 +40,7 @@ export async function GET(request: Request) {
   }
 
   try {
-    const supabase = createAuthClient(); // [3]
+    const supabase = createAuthClient();
     console.log('🔵 [OAuth Callback] Trocando o "code" por sessão no Supabase...');
     const { data, error } = await supabase.auth.exchangeCodeForSession(code);
 
@@ -60,7 +65,7 @@ export async function GET(request: Request) {
       return NextResponse.redirect(`${requestUrl.origin}/login?erro=oauth-failed&reason=missing-email`);
     }
 
-    // Busca perfil público ou cria um novo perfil a partir do login social [4]
+    // Busca perfil público ou cria um novo perfil a partir do login social
     let dbUser = await prisma.user.findUnique({
       where: { email },
     });
@@ -68,20 +73,19 @@ export async function GET(request: Request) {
     if (!dbUser) {
       console.log(`🔵 [OAuth Callback] Criando perfil público para o novo usuário: ${email}`);
       const adminEmail = (process.env.ADMIN_EMAIL || '').trim().toLowerCase();
-      const role = adminEmail && email === adminEmail ? 'ADMIN' : 'USER'; // [4]
+      const role = adminEmail && email === adminEmail ? 'ADMIN' : 'USER';
 
       dbUser = await prisma.user.create({
         data: {
           id: sbUser.id,
           nome,
           email,
-          password: 'SUPABASE_AUTH_PROVIDER', // Marcador para login social
+          password: 'SUPABASE_AUTH_PROVIDER',
           role,
         },
       });
     } else {
       console.log(`🔵 [OAuth Callback] Usuário já possui perfil público. Sincronizando ID...`);
-      // Garante que o ID no banco local corresponda ao ID de autenticação do Supabase
       if (dbUser.id !== sbUser.id) {
         dbUser = await prisma.user.update({
           where: { email },
@@ -90,12 +94,12 @@ export async function GET(request: Request) {
       }
     }
 
-    // Gera token assinado idêntico ao auth.ts [5]
+    // Gera token assinado idêntico ao auth.ts
     const payload = Buffer.from(dbUser.id).toString('base64url');
     const sig = crypto.createHmac('sha256', SECRET).update(payload).digest('base64url');
     const tokenSessao = `${payload}.${sig}`;
 
-    // Define cookie seguro [2]
+    // Define cookie seguro
     const cookieStore = await cookies();
     cookieStore.set(SESSION_COOKIE, tokenSessao, {
       httpOnly: true,
