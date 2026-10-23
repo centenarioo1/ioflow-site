@@ -14,6 +14,7 @@ export interface CartItem {
   variacao?: string;
   size?: string;
   imagem?: string;
+  dimensions?: any;
   image?: string;
   weight?: number;        // peso em gramas
   quantity: number;
