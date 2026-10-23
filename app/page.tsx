@@ -22,7 +22,7 @@ import {
   UserCheck 
 } from 'lucide-react';
 import { useCartStore } from '@/store/useCartStore';
-import { products as produtos } from '@/lib/products';
+//import { products as produtos } from '@/lib/products';
 import SiteHeader from '@/components/SiteHeader';
 import SiteFooter from '@/components/SiteFooter';
 import TrustBar from '@/components/TrustBar';
