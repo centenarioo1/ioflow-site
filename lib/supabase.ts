@@ -1,10 +1,12 @@
+// lib/supabase.ts
 import { createClient } from '@supabase/supabase-js';
 
-// Define fallback com '' para garantir ao TypeScript que o tipo é estritamente 'string'
-const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL || '';
-const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || '';
+// Usa um fallback de URL com formato válido para evitar que a biblioteca @supabase/supabase-js
+// lance um erro 'Invalid URL' durante a avaliação do módulo (module evaluation) no build da Vercel.
+const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL || '[suspicious link removed]';
+const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || 'placeholder-anon-key';
 
-if (!supabaseUrl || !supabaseAnonKey) {
+if (!process.env.NEXT_PUBLIC_SUPABASE_URL || !process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY) {
   console.warn(
     'Aviso: Faltam as variáveis NEXT_PUBLIC_SUPABASE_URL e NEXT_PUBLIC_SUPABASE_ANON_KEY no ambiente.'
   );
@@ -13,10 +15,10 @@ if (!supabaseUrl || !supabaseAnonKey) {
 // 🚨 CLIENTE EXCLUSIVO DO NAVEGADOR (Com suporte obrigatório a PKCE)
 export const supabase = createClient(supabaseUrl, supabaseAnonKey, {
   auth: { 
-    persistSession: true,      // Fundamental para salvar o verificador de código no navegador
+    persistSession: true,
     autoRefreshToken: true,
     detectSessionInUrl: true,
-    flowType: 'pkce'           // Força o uso do fluxo PKCE (envia o ?code=... na query para o Next.js)
+    flowType: 'pkce'
   },
 });
 
