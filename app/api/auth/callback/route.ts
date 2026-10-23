@@ -5,10 +5,13 @@ import { prisma } from '@/lib/prisma';
 import crypto from 'crypto';
 import { cookies } from 'next/headers';
 
-// 🚨 OBRIGATÓRIO no Next.js App Router:
-// Força esta rota a ser tratada como 100% dinâmica no servidor,
-// impedindo que a Vercel tente pré-renderizá-la no "npm run build".
+// 🚨 CONFIGURAÇÕES CRÍTICAS DO NEXT.JS APP ROUTER:
+// 1. Força a execução estritamente no ambiente Node.js (necessário para Prisma e crypto)
+export const runtime = 'nodejs';
+// 2. Desativa 100% a pré-renderização estática no build da Vercel
 export const dynamic = 'force-dynamic';
+export const revalidate = 0;
+export const fetchCache = 'force-no-store';
 
 const SECRET = process.env.AUTH_SECRET || 'bioflow-dev-secret-change-in-prod-123456';
 const SESSION_COOKIE = 'bioflow_session';
@@ -30,13 +33,17 @@ export async function GET(request: Request) {
   // Se o Supabase retornou um erro diretamente na URL
   if (errorType) {
     console.error(`❌ [OAuth Callback] Supabase retornou erro na URL: ${errorType} - ${errorDesc}`);
-    return NextResponse.redirect(`${requestUrl.origin}/login?erro=oauth-failed&reason=${encodeURIComponent(errorDesc || errorType)}`);
+    return NextResponse.redirect(
+      `${requestUrl.origin}/login?erro=oauth-failed&reason=${encodeURIComponent(errorDesc || errorType)}`
+    );
   }
 
   // Se não há código de autenticação, o fluxo não pode continuar
   if (!code) {
     console.warn('⚠️ [OAuth Callback] Código de autorização "code" não foi encontrado na URL.');
-    return NextResponse.redirect(`${requestUrl.origin}/login?erro=oauth-failed&reason=missing-code`);
+    return NextResponse.redirect(
+      `${requestUrl.origin}/login?erro=oauth-failed&reason=missing-code`
+    );
   }
 
   try {
@@ -46,12 +53,16 @@ export async function GET(request: Request) {
 
     if (error) {
       console.error('❌ [OAuth Callback] Erro ao trocar code por sessão no Supabase:', error.message);
-      return NextResponse.redirect(`${requestUrl.origin}/login?erro=oauth-failed&reason=${encodeURIComponent(error.message)}`);
+      return NextResponse.redirect(
+        `${requestUrl.origin}/login?erro=oauth-failed&reason=${encodeURIComponent(error.message)}`
+      );
     }
 
     if (!data.session?.user) {
       console.error('❌ [OAuth Callback] Troca concluída, mas nenhuma sessão foi retornada.');
-      return NextResponse.redirect(`${requestUrl.origin}/login?erro=oauth-failed&reason=no-session`);
+      return NextResponse.redirect(
+        `${requestUrl.origin}/login?erro=oauth-failed&reason=no-session`
+      );
     }
 
     const sbUser = data.session.user;
@@ -62,12 +73,16 @@ export async function GET(request: Request) {
 
     if (!email) {
       console.error('❌ [OAuth Callback] O provedor do Google não retornou um e-mail válido.');
-      return NextResponse.redirect(`${requestUrl.origin}/login?erro=oauth-failed&reason=missing-email`);
+      return NextResponse.redirect(
+        `${requestUrl.origin}/login?erro=oauth-failed&reason=missing-email`
+      );
     }
 
-    // Busca perfil público ou cria um novo perfil a partir do login social
-    let dbUser = await prisma.user.findUnique({
-      where: { email },
+    // Busca perfil público existente pelo ID ou pelo E-mail de forma segura
+    let dbUser = await prisma.user.findFirst({
+      where: {
+        OR: [{ id: sbUser.id }, { email }],
+      },
     });
 
     if (!dbUser) {
@@ -85,13 +100,11 @@ export async function GET(request: Request) {
         },
       });
     } else {
-      console.log(`🔵 [OAuth Callback] Usuário já possui perfil público. Sincronizando ID...`);
-      if (dbUser.id !== sbUser.id) {
-        dbUser = await prisma.user.update({
-          where: { email },
-          data: { id: sbUser.id }
-        });
-      }
+      console.log(`🔵 [OAuth Callback] Usuário já possui perfil público. Atualizando nome...`);
+      dbUser = await prisma.user.update({
+        where: { id: dbUser.id },
+        data: { nome },
+      });
     }
 
     // Gera token assinado idêntico ao auth.ts
@@ -99,7 +112,7 @@ export async function GET(request: Request) {
     const sig = crypto.createHmac('sha256', SECRET).update(payload).digest('base64url');
     const tokenSessao = `${payload}.${sig}`;
 
-    // Define cookie seguro
+    // Define cookie seguro de sessão
     const cookieStore = await cookies();
     cookieStore.set(SESSION_COOKIE, tokenSessao, {
       httpOnly: true,
@@ -114,6 +127,8 @@ export async function GET(request: Request) {
 
   } catch (err: any) {
     console.error('❌ [OAuth Callback] Erro crítico não tratado no processo:', err);
-    return NextResponse.redirect(`${requestUrl.origin}/login?erro=oauth-failed&reason=internal-error`);
+    return NextResponse.redirect(
+      `${requestUrl.origin}/login?erro=oauth-failed&reason=internal-error`
+    );
   }
 }
