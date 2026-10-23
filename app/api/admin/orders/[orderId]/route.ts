@@ -12,19 +12,15 @@ export async function PATCH(
       return NextResponse.json({ error: 'Acesso negado.' }, { status: 403 });
     }
 
-    // 1. Extrai o orderId corretamente aguardando a Promise (Next.js 15+)
     const { orderId } = await params;
-    
     const body = await req.json();
     const { status, trackingCode } = body;
 
-    // Constrói os dados de atualização dinamicamente
     const updateData: any = {};
     if (status !== undefined) updateData.status = status;
     if (trackingCode !== undefined) updateData.trackingCode = trackingCode;
 
     const updatedOrder = await prisma.order.update({
-      // 2. Usa a variável orderId extraída acima
       where: { id: orderId },
       data: updateData,
     });
