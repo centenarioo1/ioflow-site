@@ -33,7 +33,7 @@ import { products as produtos, type Product } from '@/lib/products';
 
 // Converta os produtos para o tipo correto no filtro
 const nutrientes = (produtos as Product[]).filter((p) => p.categoria === 'nutriente');
-const solos = (produtos as Product[]).filter((p) => p.categoria === 'solo' || p.categoria === 'substrato');
+const solos = (produtos as Product[]).filter((p) => (p.categoria as string) === 'solo' || p.categoria === 'substrato');
 const emendas = (produtos as Product[]).filter((p) => p.categoria === 'emenda');
 
 const faqItems = [
