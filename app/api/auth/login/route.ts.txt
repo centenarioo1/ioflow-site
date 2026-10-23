@@ -1,0 +1,48 @@
+import { NextResponse } from 'next/server';
+import { supabase } from '@/lib/supabase';
+import { SESSION_COOKIE, createToken, sessionCookieOptions, toPublicUser } from '@/lib/auth';
+import { upsertAppUser } from '@/lib/appUser';
+
+export async function POST(req: Request) {
+  try {
+    const body = await req.json();
+    const email = body.email?.trim().toLowerCase();
+    const password = body.senha || body.password;
+
+    if (!email || !password) {
+      return NextResponse.json({ error: 'E-mail e senha são obrigatórios.' }, { status: 400 });
+    }
+
+    const { data, error } = await supabase.auth.signInWithPassword({
+      email,
+      password,
+    });
+
+    if (error || !data.user) {
+      return NextResponse.json({ error: 'E-mail ou senha incorretos.' }, { status: 401 });
+    }
+
+    const authUser = data.user;
+    const nome =
+      authUser.user_metadata?.nome ||
+      authUser.user_metadata?.name ||
+      'Cliente';
+
+    const appUser = await upsertAppUser({
+      id: authUser.id,
+      nome,
+      email: authUser.email || email,
+    });
+
+    const response = NextResponse.json({
+      ok: true,
+      user: toPublicUser(appUser),
+    });
+
+    response.cookies.set(SESSION_COOKIE, createToken(appUser.id), sessionCookieOptions());
+    return response;
+  } catch (err) {
+    console.error('Erro no login:', err);
+    return NextResponse.json({ error: 'Erro interno no servidor.' }, { status: 500 });
+  }
+}

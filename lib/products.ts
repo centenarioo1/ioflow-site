@@ -1,0 +1,365 @@
+// lib/products.ts
+
+// ==========================================================
+// TIPOS BASE (dados brutos, usados também pelo Melhor Envio)
+// ==========================================================
+export interface ProductVariant {
+  id: string;
+  size: string;
+  price: number;
+  originalPrice: number;
+  stock: number;
+  weight: number; // em gramas (usado na API do Melhor Envio)
+  dimensions: {
+    height: number; // cm
+    width: number;  // cm
+    length: number; // cm
+  };
+}
+
+export type CategoriaBase = 'substratos' | 'fertilizantes' | 'adubos' | 'condicionadores';
+
+export interface ProductBase {
+  id: string;
+  name: string;
+  slug: string;
+  category: CategoriaBase;
+  description: string;
+  features: string[];
+  variants: ProductVariant[];
+  images: string[];
+}
+
+// ==========================================================
+// TIPO NORMALIZADO (o que as páginas do site consomem)
+// ==========================================================
+export interface Product extends ProductBase {
+  nome: string;
+  categoria: 'substrato' | 'nutriente' | 'emenda';
+  subtitulo: string;
+  descricao: string;
+  descricaoCurta: string;
+  tags: string[];
+  preco: number;          // menor preço entre variantes em estoque
+  precoOriginal: number;
+  imagens: string[];
+  fase: string;
+  acento: string;
+  estoque: number;        // soma do estoque de todas as variantes
+  emEstoque: boolean;
+}
+
+// ==========================================================
+// CATÁLOGO BRUTO
+// ==========================================================
+const catalogoBase: ProductBase[] = [
+  // ==========================================
+  // 1. SUBSTRATOS
+  // ==========================================
+  {
+    id: '58257070448',
+    slug: 'substrato-rico-humus-perlita-fibra-coco-arroz',
+    name: 'Substrato Rico Humus Perlita Fibra de Coco Casca de Arroz BIOFLOW',
+    category: 'substratos',
+    description: 'Substrato balanceado e aerado, rico em húmus com alta retenção de umidade e excelente drenagem para desenvolvimento radicular.',
+    features: ['Composição nobre com húmus e perlita', 'Excelente capacidade de drenagem e aeração', 'Pronto para o plantio'],
+    images: ['/images/products/substrato-rico.jpg'],
+    variants: [
+      { id: '219187113534', size: '5L', price: 23.90, originalPrice: 30.00, stock: 117, weight: 1300, dimensions: { height: 8, width: 25, length: 35 } },
+      { id: '219187113535', size: '10L', price: 35.90, originalPrice: 46.00, stock: 117, weight: 2600, dimensions: { height: 12, width: 30, length: 40 } },
+      { id: '219187113536', size: '20L', price: 66.90, originalPrice: 84.00, stock: 117, weight: 4000, dimensions: { height: 15, width: 30, length: 50 } },
+    ],
+  },
+  {
+    id: '23299389409',
+    slug: 'substrato-super-solo-completo',
+    name: 'Substrato Super Solo Completo BIOFLOW',
+    category: 'substratos',
+    description: 'Super solo completo formulado com matéria orgânica balanceada e minerais essenciais para todo o ciclo vegetal.',
+    features: ['Nutrição orgânica de liberação lenta', 'Ideal para cultivo orgânico', 'Estrutura biológica viva'],
+    images: ['/images/products/super-solo.jpg'],
+    variants: [
+      { id: '129655730543', size: '5L', price: 23.90, originalPrice: 30.00, stock: 107, weight: 1300, dimensions: { height: 8, width: 25, length: 35 } },
+      { id: '129655730544', size: '10L', price: 35.90, originalPrice: 46.00, stock: 117, weight: 2600, dimensions: { height: 12, width: 30, length: 40 } },
+      { id: '129655730545', size: '20L', price: 66.90, originalPrice: 84.00, stock: 117, weight: 4000, dimensions: { height: 15, width: 30, length: 50 } },
+    ],
+  },
+  {
+    id: '58256436680',
+    slug: 'substrato-biomix-turfa-perlita-casca-arroz',
+    name: 'Substrato BioMix: Turfa, Perlita e Casca de Arroz Carbonizada BIOFLOW',
+    category: 'substratos',
+    description: 'Combinação clássica de turfa, perlita e casca de arroz carbonizada para aeração extrema e excelente controle de pH.',
+    features: ['Leveza estrutural superior', 'Perfeita relação ar/água para as raízes', 'Ideal para cultivo indoor e estufas'],
+    images: ['/images/products/biomix.jpg'],
+    variants: [
+      { id: '139655647764', size: '2L', price: 11.90, originalPrice: 14.90, stock: 0, weight: 500, dimensions: { height: 5, width: 20, length: 30 } },
+      { id: '238802853732', size: '10L', price: 35.90, originalPrice: 46.00, stock: 117, weight: 2600, dimensions: { height: 12, width: 30, length: 40 } },
+      { id: '238802853733', size: '20L', price: 66.90, originalPrice: 84.00, stock: 55, weight: 4710, dimensions: { height: 20, width: 37, length: 50 } },
+    ],
+  },
+  {
+    id: '58206334194',
+    slug: 'substrato-sphagnotec-turfa-perlita-cultivo-indoor',
+    name: 'Substrato Sphagnotec: Turfa e Perlita Cultivo Indoor BIOFLOW',
+    category: 'substratos',
+    description: 'Substrato premium inerte à base de Turfa de Sphagnum e Perlita expandida para máximo controle nutricional.',
+    features: ['Substrato inerte de alta pureza', 'Total controle de fertirrigação', 'Volume para grandes cultivos'],
+    images: ['/images/products/sphagnotec.jpg'],
+    variants: [
+      { id: '179725725743', size: '50L', price: 62.90, originalPrice: 79.00, stock: 17, weight: 4000, dimensions: { height: 30, width: 30, length: 70 } },
+    ],
+  },
+  {
+    id: '23599409706',
+    slug: 'substrato-fibra-de-coco-e-perlita',
+    name: 'Fibra de Coco e Perlita Melhor Custo Benefício BIOFLOW',
+    category: 'substratos',
+    description: 'Mistura semi-inerte balanceada pronta para cultivo hidropônico e fertirrigação contínua.',
+    features: ['Fibra de coco tratada e lavada', 'Alta oxigenação radicular', 'Excelente custo-benefício'],
+    images: ['/images/products/coco-perlita.jpg'],
+    variants: [
+      { id: '159552993387', size: '5L', price: 16.90, originalPrice: 22.00, stock: 0, weight: 1000, dimensions: { height: 8, width: 25, length: 35 } },
+      { id: '159552993384', size: '10L', price: 26.90, originalPrice: 34.00, stock: 117, weight: 2000, dimensions: { height: 12, width: 30, length: 40 } },
+      { id: '159552993385', size: '20L', price: 42.90, originalPrice: 54.00, stock: 117, weight: 4000, dimensions: { height: 15, width: 35, length: 45 } },
+    ],
+  },
+
+  // ==========================================
+  // 2. CONDICIONADORES & MATÉRIAS-PRIMAS
+  // ==========================================
+  {
+    id: '58206260102',
+    slug: 'perlita-expandida-grossa',
+    name: 'Perlita Expandida Grossa Substrato Germinação Grow Indoor BIOFLOW',
+    category: 'condicionadores',
+    description: 'Mineral vulcânico expandido de alta granulometria, ideal para aeração do solo e germinação de clones e sementes.',
+    features: ['Granulometria grossa', '100% estéril e inerte', 'Evita compactação do solo'],
+    images: ['/images/products/perlita.jpg'],
+    variants: [
+      { id: '189619447329', size: '2L', price: 11.90, originalPrice: 14.90, stock: 0, weight: 500, dimensions: { height: 5, width: 20, length: 30 } },
+      { id: '199186920053', size: '5L', price: 19.90, originalPrice: 25.00, stock: 0, weight: 1000, dimensions: { height: 8, width: 25, length: 35 } },
+      { id: '199186920054', size: '10L', price: 27.90, originalPrice: 35.00, stock: 0, weight: 2000, dimensions: { height: 12, width: 30, length: 40 } },
+      { id: '129655658497', size: '20L', price: 53.90, originalPrice: 68.00, stock: 117, weight: 3000, dimensions: { height: 15, width: 35, length: 45 } },
+    ],
+  },
+  {
+    id: '58256222893',
+    slug: 'fibra-de-coco-triturada',
+    name: 'Fibra de Coco Triturada Orquídeas Rosa do Deserto BIOFLOW',
+    category: 'condicionadores',
+    description: 'Fibra e pó de coco lavados com baixa condutividade elétrica, excelentes para orquídeas, folhagens e condicionamento de solo.',
+    features: ['Baixa condutividade elétrica (EC)', 'PH estável entre 5.8 e 6.5', 'Retenção uniforme de umidade'],
+    images: ['/images/products/fibra-coco.jpg'],
+    variants: [
+      { id: '159790972294', size: '2L', price: 11.90, originalPrice: 14.90, stock: 0, weight: 500, dimensions: { height: 5, width: 20, length: 30 } },
+      { id: '199186998969', size: '5L', price: 12.90, originalPrice: 17.00, stock: 117, weight: 1000, dimensions: { height: 8, width: 25, length: 35 } },
+      { id: '189619365173', size: '10L', price: 16.90, originalPrice: 22.00, stock: 0, weight: 2000, dimensions: { height: 12, width: 30, length: 40 } },
+      { id: '189619365174', size: '20L', price: 37.90, originalPrice: 48.00, stock: 117, weight: 4000, dimensions: { height: 15, width: 35, length: 45 } },
+    ],
+  },
+  {
+    id: '22199406873',
+    slug: 'casca-de-arroz-carbonizada',
+    name: 'Casca de Arroz Carbonizada Aeração e Drenagem BIOFLOW',
+    category: 'condicionadores',
+    description: 'Condicionador rico em silício e carbono que melhora a aeração e previne ataques de pragas no sistema radicular.',
+    features: ['Rica em silício orgânico', 'Evita proliferação de fungos', 'Melhora retenção de nutrientes'],
+    images: ['/images/products/casca-arroz.jpg'],
+    variants: [
+      { id: '219186987101', size: '2L', price: 11.90, originalPrice: 15.90, stock: 122, weight: 500, dimensions: { height: 5, width: 20, length: 30 } },
+      { id: '199186987056', size: '10L', price: 13.90, originalPrice: 18.00, stock: 0, weight: 1000, dimensions: { height: 12, width: 30, length: 40 } },
+      { id: '149790922409', size: '20L', price: 20.90, originalPrice: 27.00, stock: 0, weight: 2000, dimensions: { height: 15, width: 35, length: 45 } },
+      { id: '189187594669', size: '50L', price: 43.90, originalPrice: 55.00, stock: 0, weight: 4000, dimensions: { height: 30, width: 40, length: 50 } },
+    ],
+  },
+
+  // ==========================================
+  // 3. ADUBOS ORGÂNICOS
+  // ==========================================
+  {
+    id: '23799380532',
+    slug: 'esterco-de-galinha-adubo-organico-compostado',
+    name: 'Esterco de Galinha Adubo Orgânico Compostado BIOFLOW',
+    category: 'adubos',
+    description: 'Adubo orgânico curtido e estabilizado, rico em nitrogênio, cálcio e fósforo para nutrição vigorosa.',
+    features: ['100% curtido e sem odor forte', 'Excelente aporte de Nitrogênio e Cálcio', 'Ativa a microbiota do solo'],
+    images: ['/images/products/esterco-galinha.jpg'],
+    variants: [
+      { id: '109872917980', size: '2KG', price: 12.90, originalPrice: 16.90, stock: 98, weight: 2000, dimensions: { height: 8, width: 30, length: 20 } },
+      { id: '238802917544', size: '5KG', price: 24.90, originalPrice: 32.00, stock: 105, weight: 5000, dimensions: { height: 8, width: 35, length: 25 } },
+      { id: '139655648369', size: '10KG', price: 32.90, originalPrice: 42.00, stock: 52, weight: 10000, dimensions: { height: 12, width: 40, length: 30 } },
+      { id: '238802917545', size: '20KG', price: 39.90, originalPrice: 50.00, stock: 23, weight: 20000, dimensions: { height: 15, width: 45, length: 35 } },
+    ],
+  },
+  {
+    id: '23899358271',
+    slug: 'torta-de-mamona-adubo-organico',
+    name: 'Torta de Mamona Adubo Orgânico BIOFLOW',
+    category: 'adubos',
+    description: 'Fonte nobre de nitrogênio vegetal e micronutrientes, além de condicionar o solo e repelir pragas de solo.',
+    features: ['Alto teor de nitrogênio orgânico', 'Liberação gradual de nutrientes', 'Favorece desenvolvimento vegetativo'],
+    images: ['/images/products/torta-mamona.jpg'],
+    variants: [
+      { id: '159790961066', size: '2KG', price: 13.90, originalPrice: 17.90, stock: 0, weight: 2000, dimensions: { height: 8, width: 30, length: 20 } },
+      { id: '229439512497', size: '5KG', price: 29.90, originalPrice: 38.00, stock: 163, weight: 5000, dimensions: { height: 8, width: 35, length: 25 } },
+      { id: '229439512498', size: '10KG', price: 52.90, originalPrice: 67.00, stock: 117, weight: 10000, dimensions: { height: 12, width: 40, length: 30 } },
+      { id: '229439512499', size: '20KG', price: 87.90, originalPrice: 110.00, stock: 34, weight: 20000, dimensions: { height: 15, width: 45, length: 35 } },
+    ],
+  },
+  {
+    id: '58206771793',
+    slug: 'humus-de-minhoca-adubo-organico',
+    name: 'Humus de Minhoca Bio-Humus Adubo Orgânico BIOFLOW',
+    category: 'adubos',
+    description: 'Adubo natural produzido por minhocas californianas, rico em ácidos húmicos e fúlvicos para recuperação do solo.',
+    features: ['Rico em ácidos húmicos e fúlvicos', 'Melhora capacidade de retenção de água', 'Totalmente atóxico'],
+    images: ['/images/products/humus-minhoca.jpg'],
+    variants: [
+      { id: '199187589658', size: '2KG', price: 13.90, originalPrice: 17.90, stock: 0, weight: 2000, dimensions: { height: 8, width: 30, length: 20 } },
+      { id: '238802856194', size: '5KG', price: 23.90, originalPrice: 30.00, stock: 0, weight: 5000, dimensions: { height: 8, width: 35, length: 25 } },
+      { id: '229439358068', size: '10KG', price: 32.90, originalPrice: 42.00, stock: 0, weight: 10000, dimensions: { height: 12, width: 40, length: 30 } },
+      { id: '179414529814', size: '20KG', price: 43.90, originalPrice: 56.00, stock: 0, weight: 20000, dimensions: { height: 15, width: 45, length: 35 } },
+    ],
+  },
+  {
+    id: '58207071893',
+    slug: 'humus-de-minhoca-puro-sem-terra',
+    name: 'Humus de Minhoca Puro Sem Terra Adubo Forte BIOFLOW',
+    category: 'adubos',
+    description: 'Húmus 100% puro peneirado, sem adição de terra, máxima concentração de nutrientes orgânicos.',
+    features: ['Pureza máxima sem terra misturada', 'Peneirado e homogêneo', 'Ativação imediata da vida do solo'],
+    images: ['/images/products/humus-puro.jpg'],
+    variants: [
+      { id: '238803166585', size: '5KG', price: 35.90, originalPrice: 45.00, stock: 0, weight: 5000, dimensions: { height: 8, width: 35, length: 25 } },
+      { id: '238803166583', size: '10KG', price: 43.90, originalPrice: 55.00, stock: 0, weight: 10000, dimensions: { height: 12, width: 40, length: 30 } },
+      { id: '238803166584', size: '20KG', price: 74.90, originalPrice: 94.50, stock: 0, weight: 20000, dimensions: { height: 15, width: 45, length: 35 } },
+    ],
+  },
+
+  // ==========================================
+  // 4. FERTILIZANTES & ESTIMULANTES LÍQUIDOS
+  // ==========================================
+  {
+    id: '58256234535',
+    slug: 'bio-em1-compostagem-enraizador-microorganismos',
+    name: 'Bio-EM1 Compostagem Enraizador Recuperador de Solo BIOFLOW',
+    category: 'fertilizantes',
+    description: 'Inoculante biológico concentrado com micro-organismos eficientes para acelerar compostagem e enraizamento.',
+    features: ['Consórcio de micro-organismos eficientes', 'Acelera decomposição e enraizamento', 'Restaura a saúde de solos cansados'],
+    images: ['/images/products/bio-em1.jpg'],
+    variants: [
+      { id: '239439356486', size: '250ml', price: 27.90, originalPrice: 35.00, stock: 100, weight: 500, dimensions: { height: 8, width: 3, length: 4 } },
+      { id: '239439356487', size: '1L', price: 42.90, originalPrice: 54.00, stock: 50, weight: 1000, dimensions: { height: 15, width: 5, length: 8 } },
+    ],
+  },
+  {
+    id: '58206317707',
+    slug: 'bio-start-fertilizante-adubo-enraizador',
+    name: 'Bio-Start® Fertilizante Adubo Enraizador Clones e Mudas',
+    category: 'fertilizantes',
+    description: 'Estimulante concentrado com fitormônios e aminoácidos para rápido desenvolvimento de raízes em clones e transplantes.',
+    features: ['Explosão de enraizamento', 'Reduz o estresse pós-transplante', 'Ideal para clones e mudas jovens'],
+    images: ['/images/products/bio-start.jpg'],
+    variants: [
+      { id: '228801785804', size: '250ml', price: 35.90, originalPrice: 45.00, stock: 37, weight: 400, dimensions: { height: 8, width: 5, length: 5 } },
+    ],
+  },
+  {
+    id: '58256489886',
+    slug: 'bio-green-fertilizante-vegetacao',
+    name: 'Bio-Green® Fertilizante Organo-Mineral para Vegetação',
+    category: 'fertilizantes',
+    description: 'Nutrição completa para a fase vegetativa, garantindo folhagem verde intensa, caules grossos e crescimento acelerado.',
+    features: ['Rico em Nitrogênio e Micronutrientes quelatados', 'Alta absorção foliar e radicular', 'Estimula rápida formação de biomassa'],
+    images: ['/images/products/bio-green.jpg'],
+    variants: [
+      { id: '199186722728', size: '250ml', price: 35.90, originalPrice: 44.90, stock: 105, weight: 400, dimensions: { height: 10, width: 10, length: 15 } },
+      { id: '199186722729', size: '1L', price: 63.90, originalPrice: 79.90, stock: 52, weight: 1400, dimensions: { height: 15, width: 15, length: 20 } },
+    ],
+  },
+  {
+    id: '58256489392',
+    slug: 'bio-potassium-fertilizante-flores-frutos',
+    name: 'Bio-Potassium® Fertilizante Organo-Mineral Flores e Frutos',
+    category: 'fertilizantes',
+    description: 'Fórmula enriquecida em Potássio para fase de floração e frutificação, aumentando peso, aroma e densidade dos frutos.',
+    features: ['Alta concentração de Potássio bioativo', 'Maximiza produção de resinas e frutos', 'Absorção rápida sem queimar as raízes'],
+    images: ['/images/products/bio-potassium.jpg'],
+    variants: [
+      { id: '219619165964', size: '250ml', price: 27.90, originalPrice: 34.90, stock: 88, weight: 350, dimensions: { height: 10, width: 10, length: 15 } },
+      { id: '219619165965', size: '1L', price: 51.90, originalPrice: 65.90, stock: 44, weight: 1200, dimensions: { height: 15, width: 15, length: 20 } },
+    ],
+  },
+  {
+    id: '58206330358',
+    slug: 'melaco-de-cana-adubo-bioestimulante',
+    name: 'Melaço de Cana Adubo Fertilizante Líquido Bioestimulante BIOFLOW',
+    category: 'fertilizantes',
+    description: 'Fonte pura de carboidratos solúveis e minerais para alimentar a microbiota benéfica do solo e potenciar a fotossíntese.',
+    features: ['Alimento nobre para micro-organismos', 'Enriquece os açúcares e aroma das plantas', '100% natural e concentrado'],
+    images: ['/images/products/melaco-cana.jpg'],
+    variants: [
+      { id: '119872865375', size: '1L', price: 35.90, originalPrice: 44.90, stock: 0, weight: 1000, dimensions: { height: 20, width: 20, length: 10 } },
+    ],
+  },
+];
+
+// ==========================================================
+// NORMALIZAÇÃO (traduz os dados para o formato das páginas)
+// ==========================================================
+const INFO_CATEGORIA: Record<
+  CategoriaBase,
+  { categoria: Product['categoria']; fase: string; acento: string }
+> = {
+  substratos:      { categoria: 'substrato', fase: 'Substrato',           acento: '#22c55e' },
+  condicionadores: { categoria: 'substrato', fase: 'Aeração & Drenagem',  acento: '#0ea5e9' },
+  fertilizantes:   { categoria: 'nutriente', fase: 'Nutrição Líquida',    acento: '#d4a843' },
+  adubos:          { categoria: 'emenda',    fase: 'Adubo Orgânico',      acento: '#b45309' },
+};
+
+function normalizar(p: ProductBase): Product {
+  const info = INFO_CATEGORIA[p.category];
+  const disponiveis = p.variants.filter((v) => v.stock > 0);
+  const base = disponiveis.length > 0 ? disponiveis : p.variants;
+  const maisBarata = base.reduce((menor, v) => (v.price < menor.price ? v : menor), base[0]);
+  const estoque = p.variants.reduce((acc, v) => acc + v.stock, 0);
+
+  return {
+    ...p,
+    nome: p.name,
+    categoria: info.categoria,
+    subtitulo: p.variants.map((v) => v.size).join(' · '),
+    descricao: p.description,
+    descricaoCurta: p.description,
+    tags: [...p.features, info.fase, p.category, p.slug.split('-').join(' ')],
+    preco: maisBarata.price,
+    precoOriginal: maisBarata.originalPrice,
+    imagens: p.images,
+    fase: info.fase,
+    acento: info.acento,
+    estoque,
+    emEstoque: estoque > 0,
+  };
+}
+
+// ==========================================================
+// EXPORTS OFICIAIS
+// ==========================================================
+export const products: Product[] = catalogoBase.map(normalizar);
+export const produtos: Product[] = products;
+
+export const categorias: { id: string; label: string }[] = [
+  { id: 'todos',     label: 'Todos' },
+  { id: 'substrato', label: 'Substratos & Aeração' },
+  { id: 'nutriente', label: 'Nutrientes Líquidos' },
+  { id: 'emenda',    label: 'Adubos Orgânicos' },
+];
+
+export function getProdutoPorId(id: string): Product | undefined {
+  return products.find((p) => p.id === id);
+}
+
+export function getProdutoPorSlug(slug: string): Product | undefined {
+  return products.find((p) => p.slug === slug);
+}

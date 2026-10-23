@@ -1,0 +1,65 @@
+import { NextRequest, NextResponse } from 'next/server';
+import { requireAdmin } from '@/lib/auth';
+import { serializeOrder } from '@/lib/orders';
+import { prisma } from '@/lib/prisma';
+
+const STATUS_VALIDOS = [
+  'Pendente',
+  'Aprovado',
+  'Em Preparação',
+  'Enviado',
+  'Entregue',
+  'Cancelado',
+  'Reembolsado',
+];
+
+export async function GET() {
+  const admin = await requireAdmin();
+  if (!admin) {
+    return NextResponse.json({ error: 'Acesso restrito ao administrador.' }, { status: 403 });
+  }
+
+  const orders = await prisma.order.findMany({
+    include: { user: { select: { nome: true, email: true } } },
+    orderBy: { createdAt: 'desc' },
+  });
+
+  return NextResponse.json({ orders: orders.map(serializeOrder) });
+}
+
+export async function PATCH(req: NextRequest) {
+  const admin = await requireAdmin();
+  if (!admin) {
+    return NextResponse.json({ error: 'Acesso restrito ao administrador.' }, { status: 403 });
+  }
+
+  try {
+    const { orderId, status, trackingCode } = await req.json();
+
+    if (!orderId) {
+      return NextResponse.json({ error: 'Pedido inválido.' }, { status: 400 });
+    }
+
+    const data: { status?: string; trackingCode?: string } = {};
+    if (status) {
+      if (!STATUS_VALIDOS.includes(status)) {
+        return NextResponse.json({ error: 'Dados inválidos.' }, { status: 400 });
+      }
+      data.status = status;
+    }
+    if (trackingCode !== undefined) {
+      data.trackingCode = String(trackingCode) || undefined;
+    }
+
+    const order = await prisma.order.update({
+      where: { id: orderId },
+      data,
+      include: { user: { select: { nome: true, email: true } } },
+    });
+
+    return NextResponse.json({ ok: true, order: serializeOrder(order) });
+  } catch (e) {
+    console.error('Erro ao atualizar pedido:', e);
+    return NextResponse.json({ error: 'Erro ao atualizar pedido.' }, { status: 500 });
+  }
+}

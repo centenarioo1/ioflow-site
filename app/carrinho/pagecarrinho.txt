@@ -1,0 +1,597 @@
+'use client';
+
+import React, { useEffect, useState } from 'react';
+import { useRouter } from 'next/navigation';
+import Link from 'next/link';
+import { 
+  ShoppingBag, Trash2, Plus, Minus, ArrowLeft, 
+  Truck, Tag, CreditCard, Loader2, CheckCircle, AlertCircle, MapPin
+} from 'lucide-react';
+import { useCartStore } from '@/store/useCartStore';
+
+const fmt = (v?: number | null) => {
+  if (v === undefined || v === null || isNaN(v)) return 'R$ 0,00';
+  return `R$ ${v.toFixed(2).replace('.', ',')}`;
+};
+
+export default function CarrinhoPage() {
+  const router = useRouter();
+  
+  // Zustand store
+  const { items, updateQuantity, removeItem, clearCart } = useCartStore();
+
+  // Estados locais da página
+  const [isMounted, setIsMounted] = useState(false);
+  const [isLogged, setIsLogged] = useState(false);
+  
+  // Dados do Comprador (Puxados do LocalStorage)
+  const [userData, setUserData] = useState({
+    id: '',
+    nome: '',
+    email: '',
+    telefone: '',
+    cpf: ''
+  });
+
+  // Dados de Envio e Endereço
+  const [cep, setCep] = useState('');
+  const [rua, setRua] = useState('');
+  const [numero, setNumero] = useState('');
+  const [complemento, setComplemento] = useState('');
+  const [bairro, setBairro] = useState('');
+  const [cidade, setCidade] = useState('');
+  const [estado, setEstado] = useState('');
+
+  // Frete e Cupom
+  const [calculandoFrete, setCalculandoFrete] = useState(false);
+  const [freteOpcoes, setFreteOpcoes] = useState<{ nome: string; valor: number; prazo: number }[]>([]);
+  const [freteSelecionado, setFreteSelecionado] = useState<{ nome: string; valor: number } | null>(null);
+  const [freteErro, setFreteErro] = useState('');
+  
+  const [cupomInput, setCupomInput] = useState('');
+  const [aplicandoCupom, setAplicandoCupom] = useState(false);
+  const [cupomAplicado, setCupomAplicado] = useState<{ codigo: string; desconto: number } | null>(null);
+  const [cupomErro, setCupomErro] = useState('');
+
+  const [loadingCheckout, setLoadingCheckout] = useState(false);
+  const [erroCheckout, setErroCheckout] = useState('');
+
+  // Sincronização de montagem e sessão do usuário
+  useEffect(() => {
+    setIsMounted(true);
+    const session = localStorage.getItem('user_session');
+    if (session) {
+      try {
+        const u = JSON.parse(session);
+        setIsLogged(true);
+        setUserData({
+          id: u?.id || '',
+          nome: u?.nome || '',
+          email: u?.email || '',
+          telefone: u?.telefone || '',
+          cpf: u?.cpf || ''
+        });
+      } catch (e) {
+        console.warn('Erro ao ler dados da sessão:', e);
+      }
+    }
+  }, []);
+
+  if (!isMounted) {
+    return (
+      <div style={{ minHeight: '100vh', background: '#f7f4ee', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+        <Loader2 size={40} className="animate-spin" color="#15803d" />
+      </div>
+    );
+  }
+
+  // Cálculos de Valores
+  const subtotal = items.reduce((acc, it) => acc + (it.preco * it.quantity), 0);
+  const valorFrete = freteSelecionado ? freteSelecionado.valor : 0;
+  const valorDesconto = cupomAplicado ? cupomAplicado.desconto : 0;
+  const total = Math.max(0, subtotal + valorFrete - valorDesconto);
+
+  // Calcula opções de frete real e auto-preenche o endereço via ViaCEP
+  const handleCalcularFrete = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setFreteErro('');
+    setFreteOpcoes([]);
+    setFreteSelecionado(null);
+
+    const cepLimpo = cep.replace(/\D/g, '');
+    if (cepLimpo.length !== 8) {
+      setFreteErro('Por favor, insira um CEP válido de 8 dígitos.');
+      return;
+    }
+
+    setCalculandoFrete(true);
+
+    // Auto-preenchimento do Endereço via ViaCEP
+    try {
+      const viaCepRes = await fetch(`https://viacep.com.br/ws/${cepLimpo}/json/`);
+      const viaCepData = await viaCepRes.json();
+      if (!viaCepData.erro) {
+        setRua(viaCepData.logradouro || '');
+        setBairro(viaCepData.bairro || '');
+        setCidade(viaCepData.localidade || '');
+        setEstado(viaCepData.uf || '');
+      }
+    } catch (e) {
+      console.warn('Erro ao consultar ViaCEP para preenchimento de endereço:', e);
+    }
+
+    // Chamada oficial da cotação
+    try {
+      const res = await fetch('/api/shipping/calculate', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ cepDestino: cepLimpo, itens: items }),
+      });
+
+      const data = await res.json();
+      if (!res.ok) {
+        throw new Error(data.error || 'Erro ao calcular.');
+      }
+
+      const opcoesCalculadas = data.opcoes || [];
+      setFreteOpcoes(opcoesCalculadas);
+      
+      if (opcoesCalculadas.length > 0) {
+        const primeiraOpcao = opcoesCalculadas.at(0);
+        if (primeiraOpcao) {
+          setFreteSelecionado({
+            nome: primeiraOpcao.nome,
+            valor: primeiraOpcao.valor,
+          });
+        }
+      }
+    } catch (err: any) {
+      console.warn('Usando fallback offline contendo todas as opções do Sandbox:', err);
+      const fallbackOptions = [
+        { nome: 'Correios (SEDEX)', valor: subtotal > 150 ? 0 : 22.50, prazo: 3 },
+        { nome: 'Correios (PAC)', valor: subtotal > 150 ? 0 : 14.90, prazo: 7 },
+        { nome: 'Jadlog (.COM)', valor: subtotal > 150 ? 0 : 18.20, prazo: 5 },
+        { nome: 'Jadlog (PACKAGE)', valor: subtotal > 150 ? 0 : 16.50, prazo: 6 }
+      ];
+      setFreteOpcoes(fallbackOptions);
+      const primeiraOpcaoSimulada = fallbackOptions.at(0);
+      if (primeiraOpcaoSimulada) {
+        setFreteSelecionado({ 
+          nome: primeiraOpcaoSimulada.nome, 
+          valor: primeiraOpcaoSimulada.valor 
+        });
+      }
+    } finally {
+      setCalculandoFrete(false);
+    }
+  };
+
+  // Validação de cupons via Prisma
+  const handleAplicarCupom = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setCupomErro('');
+    setCupomAplicado(null);
+
+    if (!cupomInput.trim()) return;
+
+    setAplicandoCupom(true);
+    try {
+      const res = await fetch('/api/coupons/validate', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ codigo: cupomInput.toUpperCase(), subtotal }),
+      });
+
+      const data = await res.json();
+      if (!res.ok) {
+        throw new Error(data.error || 'Cupom inválido.');
+      }
+
+      setCupomAplicado({
+        codigo: data.codigo,
+        desconto: data.desconto,
+      });
+    } catch (err: any) {
+      setCupomErro(err.message || 'Cupom inválido ou expirado.');
+    } finally {
+      setAplicandoCupom(false);
+    }
+  };
+
+  // Finalização de Compra Integrada com seu route.ts do Mercado Pago
+  const handleFinalizarCompra = async () => {
+    setErroCheckout('');
+
+    if (!isLogged) {
+      router.push('/login?redirect=/carrinho');
+      return;
+    }
+
+    // Validação de campos de Endereço antes de enviar
+    if (!rua || !numero || !bairro || !cidade || !estado) {
+      setErroCheckout('Por favor, preencha todos os campos do endereço de entrega antes de finalizar.');
+      return;
+    }
+
+    setLoadingCheckout(true);
+    try {
+      // ✅ MAPEAMENTO SEGURO: Converte os nomes do store para bater com a estrutura CartItem do route.ts
+      const mpItems = items.map(it => ({
+        id: it.productId,
+        name: it.nome,
+        price: Number(it.preco),
+        quantity: Number(it.quantity),
+        size: it.variacao || 'Padrão'
+      }));
+
+      // ✅ REQUISIÇÃO OFICIAL: Chamando a rota de API correta
+      const res = await fetch('/api/mercadopago/create-preference', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          items: mpItems,
+          userId: userData.id || null,
+          userEmail: userData.email,
+          userName: userData.nome,
+          userPhone: userData.telefone || '11999999999',
+          userCpf: userData.cpf || '00000000000',
+          cupomCodigo: cupomAplicado?.codigo || null,
+          shippingCost: valorFrete,
+          shippingServiceName: freteSelecionado?.nome || 'Padrão',
+          address: {
+            cep: cep.replace(/\D/g, ''),
+            rua: rua,
+            numero: numero,
+            complemento: complemento,
+            bairro: bairro,
+            cidade: cidade,
+            estado: estado
+          }
+        }),
+      });
+
+      const contentType = res.headers.get("content-type");
+      if (!contentType || !contentType.includes("application/json")) {
+        const textoErro = await res.text();
+        console.error("Erro bruto do servidor:", textoErro);
+        throw new Error(`Erro do servidor (${res.status}). Verifique as variáveis de ambiente no .env.local.`);
+      }
+
+      const data = await res.json();
+      if (!res.ok) {
+        throw new Error(data.error || 'Erro ao processar o checkout.');
+      }
+
+      // Limpa o carrinho local
+      clearCart();
+
+      // Redireciona para o link gerado do Mercado Pago
+      if (data.initPoint) {
+        window.location.href = data.initPoint;
+      } else {
+        router.push('/dashboard?pedido=criado');
+      }
+
+    } catch (err: any) {
+      console.error("Erro no checkout:", err);
+      setErroCheckout(err.message || 'Erro ao conectar com o gateway de pagamento. Tente novamente.');
+    } finally {
+      setLoadingCheckout(false);
+    }
+  };
+
+  return (
+    <div style={{ minHeight: '100vh', background: '#f7f4ee', color: '#111827', fontFamily: "'Inter', sans-serif" }}>
+      {/* Cabeçalho */}
+      <header style={{ background: '#0d2410', padding: '16px 20px', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+        <Link href="/" style={{ textDecoration: 'none', color: 'white', fontWeight: 900, fontSize: 16 }}>
+          BIOFLOW<span style={{ color: '#d4a843' }}>.</span>
+        </Link>
+        <Link href="/produtos" style={{ display: 'flex', alignItems: 'center', gap: 6, color: '#f7f4ee', textDecoration: 'none', fontSize: 13, fontWeight: 700 }}>
+          <ArrowLeft size={16} /> Voltar para a Loja
+        </Link>
+      </header>
+
+      <main style={{ maxWidth: 1100, margin: '0 auto', padding: '40px 20px 80px' }}>
+        <h1 style={{ fontSize: 24, fontWeight: 900, marginBottom: 24, display: 'flex', alignItems: 'center', gap: 10 }}>
+          <ShoppingBag size={24} color="#15803d" /> Seu Carrinho de Compras
+        </h1>
+
+        {items.length === 0 ? (
+          <div style={{ background: 'white', border: '1px solid #e7e2d6', borderRadius: 20, padding: '60px 20px', textAlign: 'center' }}>
+            <ShoppingBag size={64} color="#9ca3af" style={{ margin: '0 auto 16px' }} />
+            <h2 style={{ fontSize: 18, fontWeight: 800, color: '#374151', marginBottom: 8 }}>Seu carrinho está vazio</h2>
+            <p style={{ fontSize: 14, color: '#6b7280', marginBottom: 24 }}>Explore nossos adubos biológicos e melhore seu cultivo!</p>
+            <Link href="/produtos" style={{ display: 'inline-flex', alignItems: 'center', background: '#15803d', color: 'white', textDecoration: 'none', padding: '14px 28px', borderRadius: 12, fontWeight: 800, fontSize: 14, boxShadow: '0 4px 12px rgba(21, 128, 61, 0.2)' }}>
+              Ver Catálogo de Produtos
+            </Link>
+          </div>
+        ) : (
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr', gap: 30 }} className="lg:grid-cols-[1fr_400px]">
+            
+            {/* Lado Esquerdo: Itens e Formulários */}
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 24 }}>
+              
+              {/* Lista de Itens */}
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
+                <h2 style={{ fontSize: 16, fontWeight: 900, color: '#0d2410', margin: 0 }}>Produtos no Carrinho</h2>
+                {items.map((item) => (
+                  <div key={`${item.productId}-${item.variantId || 'unica'}`} style={{ background: 'white', border: '1px solid #e7e2d6', borderRadius: 16, padding: 20, display: 'flex', gap: 16, alignItems: 'center', flexWrap: 'wrap', justifyContent: 'space-between' }}>
+                    <div style={{ display: 'flex', gap: 16, alignItems: 'center', flex: 1, minWidth: 240 }}>
+                      <div style={{ width: 64, height: 64, background: '#f3f4f6', borderRadius: 12, display: 'flex', alignItems: 'center', justifyContent: 'center', border: '1px solid #e5e7eb' }}>
+                        <ShoppingBag size={28} color="#15803d" />
+                      </div>
+                      <div>
+                        <h3 style={{ fontSize: 15, fontWeight: 800, margin: '0 0 4px', color: '#111827' }}>{item.nome}</h3>
+                        {item.variacao && (
+                          <span style={{ fontSize: 12, background: '#f3f4f6', padding: '3px 8px', borderRadius: 6, color: '#4b5563', fontWeight: 600 }}>
+                            Variação: {item.variacao}
+                          </span>
+                        )}
+                        <p style={{ fontSize: 14, fontWeight: 700, color: '#15803d', margin: '6px 0 0' }}>{fmt(item.preco)}</p>
+                      </div>
+                    </div>
+
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 20 }}>
+                      <div style={{ display: 'flex', alignItems: 'center', border: '1px solid #d1d5db', borderRadius: 8, background: '#f9fafb' }}>
+                        <button 
+                          onClick={() => updateQuantity(item.productId, item.variantId, Math.max(1, item.quantity - 1))}
+                          style={{ background: 'none', border: 'none', padding: '8px 12px', cursor: 'pointer', display: 'flex', alignItems: 'center' }}
+                        >
+                          <Minus size={13} color="#4b5563" />
+                        </button>
+                        <span style={{ fontSize: 13, fontWeight: 800, width: 20, textAlign: 'center', color: '#111827' }}>{item.quantity}</span>
+                        <button 
+                          onClick={() => updateQuantity(item.productId, item.variantId, item.quantity + 1)}
+                          style={{ background: 'none', border: 'none', padding: '8px 12px', cursor: 'pointer', display: 'flex', alignItems: 'center' }}
+                        >
+                          <Plus size={13} color="#4b5563" />
+                        </button>
+                      </div>
+
+                      <div style={{ textAlign: 'right', minWidth: 80 }}>
+                        <p style={{ fontSize: 14, fontWeight: 800, color: '#111827', margin: 0 }}>{fmt(item.preco * item.quantity)}</p>
+                      </div>
+
+                      <button 
+                        onClick={() => removeItem(item.productId, item.variantId)}
+                        style={{ background: 'none', border: 'none', color: '#dc2626', cursor: 'pointer', padding: 8, borderRadius: 8, display: 'flex', alignItems: 'center', justifyContent: 'center' }}
+                        title="Remover produto"
+                      >
+                        <Trash2 size={18} />
+                      </button>
+                    </div>
+                  </div>
+                ))}
+              </div>
+
+              {/* Formulário Dados de Entrega (Aparece apenas se estiver logado) */}
+              {isLogged ? (
+                <div style={{ background: 'white', border: '1px solid #e7e2d6', borderRadius: 20, padding: 24 }}>
+                  <h2 style={{ fontSize: 16, fontWeight: 900, marginBottom: 16, display: 'flex', alignItems: 'center', gap: 8, color: '#0d2410' }}>
+                    <MapPin size={18} color="#15803d" /> Endereço de Entrega
+                  </h2>
+                  <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16 }}>
+                    <div style={{ gridColumn: 'span 2' }}>
+                      <label style={{ fontSize: 12, fontWeight: 700, color: '#4b5563', display: 'block', marginBottom: 6 }}>Rua / Logradouro *</label>
+                      <input 
+                        type="text" 
+                        value={rua} 
+                        onChange={(e) => setRua(e.target.value)} 
+                        placeholder="Ex: Avenida Paulista"
+                        style={{ width: '100%', padding: '10px 12px', borderRadius: 8, border: '1px solid #d1d5db', fontSize: 13, outline: 'none' }}
+                      />
+                    </div>
+                    <div>
+                      <label style={{ fontSize: 12, fontWeight: 700, color: '#4b5563', display: 'block', marginBottom: 6 }}>Número *</label>
+                      <input 
+                        type="text" 
+                        value={numero} 
+                        onChange={(e) => setNumero(e.target.value)} 
+                        placeholder="Ex: 1000"
+                        style={{ width: '100%', padding: '10px 12px', borderRadius: 8, border: '1px solid #d1d5db', fontSize: 13, outline: 'none' }}
+                      />
+                    </div>
+                    <div>
+                      <label style={{ fontSize: 12, fontWeight: 700, color: '#4b5563', display: 'block', marginBottom: 6 }}>Complemento (Opcional)</label>
+                      <input 
+                        type="text" 
+                        value={complemento} 
+                        onChange={(e) => setComplemento(e.target.value)} 
+                        placeholder="Ex: Apto 51"
+                        style={{ width: '100%', padding: '10px 12px', borderRadius: 8, border: '1px solid #d1d5db', fontSize: 13, outline: 'none' }}
+                      />
+                    </div>
+                    <div>
+                      <label style={{ fontSize: 12, fontWeight: 700, color: '#4b5563', display: 'block', marginBottom: 6 }}>Bairro *</label>
+                      <input 
+                        type="text" 
+                        value={bairro} 
+                        onChange={(e) => setBairro(e.target.value)} 
+                        placeholder="Ex: Bela Vista"
+                        style={{ width: '100%', padding: '10px 12px', borderRadius: 8, border: '1px solid #d1d5db', fontSize: 13, outline: 'none' }}
+                      />
+                    </div>
+                    <div>
+                      <label style={{ fontSize: 12, fontWeight: 700, color: '#4b5563', display: 'block', marginBottom: 6 }}>Cidade *</label>
+                      <input 
+                        type="text" 
+                        value={cidade} 
+                        onChange={(e) => setCidade(e.target.value)} 
+                        placeholder="Ex: São Paulo"
+                        style={{ width: '100%', padding: '10px 12px', borderRadius: 8, border: '1px solid #d1d5db', fontSize: 13, outline: 'none' }}
+                      />
+                    </div>
+                    <div style={{ gridColumn: 'span 2' }}>
+                      <label style={{ fontSize: 12, fontWeight: 700, color: '#4b5563', display: 'block', marginBottom: 6 }}>Estado / UF *</label>
+                      <input 
+                        type="text" 
+                        value={estado} 
+                        onChange={(e) => setEstado(e.target.value)} 
+                        placeholder="Ex: SP"
+                        style={{ width: '100%', padding: '10px 12px', borderRadius: 8, border: '1px solid #d1d5db', fontSize: 13, outline: 'none' }}
+                      />
+                    </div>
+                  </div>
+                </div>
+              ) : (
+                <div style={{ background: '#fef3c7', border: '1px solid #f59e0b', color: '#92400e', padding: '16px 20px', borderRadius: 16, fontSize: 13.5, fontWeight: 700, display: 'flex', alignItems: 'center', gap: 10 }}>
+                  <AlertCircle size={20} /> Faça login para informar o endereço e finalizar sua compra de adubos.
+                </div>
+              )}
+
+            </div>
+
+            {/* Lado Direito: Resumo Financeiro, Frete e Cupom */}
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 20 }}>
+              
+              {/* Card de Preços */}
+              <div style={{ background: 'white', border: '1px solid #e7e2d6', borderRadius: 20, padding: 24 }}>
+                <h2 style={{ fontSize: 16, fontWeight: 900, marginBottom: 16, color: '#0d2410' }}>Resumo do Pedido</h2>
+                
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 12, paddingBottom: 16, borderBottom: '1px dashed #e7e2d6' }}>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 14, color: '#4b5563' }}>
+                    <span>Subtotal</span>
+                    <span style={{ fontWeight: 700, color: '#111827' }}>{fmt(subtotal)}</span>
+                  </div>
+
+                  {cupomAplicado && (
+                    <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 14, color: '#15803d', fontWeight: 600 }}>
+                      <span style={{ display: 'flex', alignItems: 'center', gap: 4 }}><Tag size={14} /> Cupom ({cupomAplicado.codigo})</span>
+                      <span>- {fmt(cupomAplicado.desconto)}</span>
+                    </div>
+                  )}
+
+                  <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 14, color: '#4b5563' }}>
+                    <span>Frete</span>
+                    <span style={{ fontWeight: 700, color: '#111827' }}>
+                      {freteSelecionado ? fmt(freteSelecionado.valor) : '--'}
+                    </span>
+                  </div>
+                </div>
+
+                <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 16, fontWeight: 900, color: '#111827', margin: '16px 0 24px' }}>
+                  <span>Total</span>
+                  <span style={{ fontSize: 18, color: '#15803d' }}>{fmt(total)}</span>
+                </div>
+
+                {erroCheckout && (
+                  <div style={{ background: '#fee2e2', color: '#b91c1c', padding: '12px', borderRadius: 10, fontSize: 12.5, fontWeight: 700, display: 'flex', alignItems: 'center', gap: 8, marginBottom: 16 }}>
+                    <AlertCircle size={16} /> {erroCheckout}
+                  </div>
+                )}
+
+                <button 
+                  onClick={handleFinalizarCompra}
+                  disabled={loadingCheckout}
+                  style={{ width: '100%', background: '#15803d', color: 'white', border: 'none', borderRadius: 12, padding: '14px 0', fontSize: 14, fontWeight: 800, cursor: loadingCheckout ? 'not-allowed' : 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8, boxShadow: '0 4px 12px rgba(21, 128, 61, 0.2)', opacity: loadingCheckout ? 0.8 : 1 }}
+                >
+                  {loadingCheckout ? (
+                    <><Loader2 size={16} className="animate-spin" /> Conectando ao Mercado Pago...</>
+                  ) : (
+                    <><CreditCard size={16} /> Finalizar Compra</>
+                  )}
+                </button>
+              </div>
+
+              {/* Card de Cálculo de Frete Multitransportadora */}
+              <div style={{ background: 'white', border: '1px solid #e7e2d6', borderRadius: 20, padding: 20 }}>
+                <h3 style={{ fontSize: 14, fontWeight: 900, marginBottom: 10, display: 'flex', alignItems: 'center', gap: 6, color: '#0d2410' }}>
+                  <Truck size={16} color="#15803d" /> Opções de Entrega
+                </h3>
+                <form onSubmit={handleCalcularFrete} style={{ display: 'flex', gap: 8, marginBottom: 12 }}>
+                  <input 
+                    type="text" 
+                    placeholder="Digite seu CEP (Ex: 16600-023)" 
+                    value={cep}
+                    onChange={(e) => setCep(e.target.value)}
+                    style={{ flex: 1, padding: '10px 12px', borderRadius: 8, border: '1px solid #d1d5db', fontSize: 13, outline: 'none' }}
+                  />
+                  <button 
+                    type="submit" 
+                    disabled={calculandoFrete}
+                    style={{ background: '#0d2410', color: 'white', border: 'none', borderRadius: 8, padding: '0 16px', fontSize: 12, fontWeight: 800, cursor: 'pointer' }}
+                  >
+                    {calculandoFrete ? <Loader2 size={14} className="animate-spin" /> : 'Calcular'}
+                  </button>
+                </form>
+
+                {freteErro && <p style={{ fontSize: 12, color: '#b91c1c', marginTop: 8, fontWeight: 600 }}>{freteErro}</p>}
+                
+                {/* Lista dinâmica de opções de frete (Suporta Correios SEDEX, PAC e Jadlog) */}
+                {freteOpcoes.length > 0 && (
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+                    {freteOpcoes.map((opcao) => (
+                      <label 
+                        key={opcao.nome} 
+                        style={{ 
+                          display: 'flex', 
+                          alignItems: 'center', 
+                          justifyContent: 'space-between', 
+                          background: freteSelecionado?.nome === opcao.nome ? '#f0fdf4' : '#f9fafb',
+                          border: freteSelecionado?.nome === opcao.nome ? '2px solid #15803d' : '1px solid #e5e7eb',
+                          padding: '10px 12px', 
+                          borderRadius: 8, 
+                          cursor: 'pointer',
+                          fontSize: 12.5,
+                          transition: 'all 0.2s ease'
+                        }}
+                      >
+                        <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                          <input 
+                            type="radio" 
+                            name="opcaoFrete" 
+                            checked={freteSelecionado?.nome === opcao.nome}
+                            onChange={() => setFreteSelecionado({ nome: opcao.nome, valor: opcao.valor })}
+                            style={{ accentColor: '#15803d' }}
+                          />
+                          <div>
+                            <span style={{ fontWeight: 700, color: '#111827' }}>{opcao.nome}</span>
+                            <p style={{ fontSize: 11, color: '#6b7280', margin: '2px 0 0' }}>Prazo: {opcao.prazo} dias úteis</p>
+                          </div>
+                        </div>
+                        <span style={{ fontWeight: 800, color: '#15803d' }}>{opcao.valor === 0 ? 'Grátis' : fmt(opcao.valor)}</span>
+                      </label>
+                    ))}
+                  </div>
+                )}
+              </div>
+
+              {/* Card de Cupom */}
+              <div style={{ background: 'white', border: '1px solid #e7e2d6', borderRadius: 20, padding: 20 }}>
+                <h3 style={{ fontSize: 14, fontWeight: 900, marginBottom: 10, display: 'flex', alignItems: 'center', gap: 6, color: '#0d2410' }}>
+                  <Tag size={16} color="#15803d" /> Cupom de Desconto
+                </h3>
+                <form onSubmit={handleAplicarCupom} style={{ display: 'flex', gap: 8 }}>
+                  <input 
+                    type="text" 
+                    placeholder="Código do cupom (Ex: BOASVINDAS)" 
+                    value={cupomInput}
+                    onChange={(e) => setCupomInput(e.target.value)}
+                    style={{ flex: 1, padding: '10px 12px', borderRadius: 8, border: '1px solid #d1d5db', fontSize: 13, outline: 'none', textTransform: 'uppercase' }}
+                  />
+                  <button 
+                    type="submit" 
+                    disabled={aplicandoCupom}
+                    style={{ background: '#0d2410', color: 'white', border: 'none', borderRadius: 8, padding: '0 16px', fontSize: 12, fontWeight: 800, cursor: 'pointer' }}
+                  >
+                    {aplicandoCupom ? <Loader2 size={14} className="animate-spin" /> : 'Aplicar'}
+                  </button>
+                </form>
+
+                {cupomErro && <p style={{ fontSize: 12, color: '#b91c1c', marginTop: 8, fontWeight: 600 }}>{cupomErro}</p>}
+                {cupomAplicado && (
+                  <div style={{ marginTop: 12, background: '#dcfce7', border: '1px solid #86efac', padding: '10px 12px', borderRadius: 8, display: 'flex', alignItems: 'center', gap: 6, fontSize: 12.5, color: '#166534', fontWeight: 700 }}>
+                    <CheckCircle size={14} /> Cupom {cupomAplicado.codigo} aplicado! (- {fmt(cupomAplicado.desconto)})
+                  </div>
+                )}
+              </div>
+
+            </div>
+
+          </div>
+        )}
+      </main>
+    </div>
+  );
+}

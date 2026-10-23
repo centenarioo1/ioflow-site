@@ -1,0 +1,62 @@
+import { NextResponse } from 'next/server';
+import { supabase } from '@/lib/supabase';
+import { toPublicUser } from '@/lib/auth';
+import { upsertAppUser } from '@/lib/appUser';
+
+export async function POST(req: Request) {
+  try {
+    const body = await req.json();
+    const nome = body.nome || body.name;
+    const email = body.email?.trim().toLowerCase();
+    const password = body.senha || body.password;
+
+    if (!email || !password || password.length < 6) {
+      return NextResponse.json(
+        { error: 'Preencha todos os campos. A senha deve ter no mínimo 6 caracteres.' },
+        { status: 400 }
+      );
+    }
+
+    const { data, error } = await supabase.auth.signUp({
+      email,
+      password,
+      options: {
+        data: {
+          nome: nome || 'Cliente',
+        },
+      },
+    });
+
+    if (error) {
+      return NextResponse.json({ error: error.message }, { status: 400 });
+    }
+
+    const user = data.user;
+    if (!user?.id) {
+      return NextResponse.json({
+        ok: true,
+        needsConfirmation: true,
+        user: {
+          id: '',
+          nome: nome || 'Cliente',
+          email,
+          role: 'USER',
+        },
+      });
+    }
+
+    const appUser = await upsertAppUser({
+      id: user.id,
+      nome: nome || user.user_metadata?.nome || 'Cliente',
+      email: user.email || email,
+    });
+
+    return NextResponse.json({
+      ok: true,
+      user: toPublicUser(appUser),
+    });
+  } catch (err) {
+    console.error('Erro no cadastro:', err);
+    return NextResponse.json({ error: 'Erro ao cadastrar usuário.' }, { status: 500 });
+  }
+}

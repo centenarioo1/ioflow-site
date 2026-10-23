@@ -1,0 +1,23 @@
+import { NextResponse } from 'next/server';
+import { getUsuarioLogado } from '@/lib/auth';
+import { serializeOrder } from '@/lib/orders';
+import { prisma } from '@/lib/prisma';
+
+export async function GET() {
+  const authUser = await getUsuarioLogado();
+  if (!authUser) {
+    return NextResponse.json({ error: 'Não autenticado.', orders: [] }, { status: 401 });
+  }
+
+  try {
+    const orders = await prisma.order.findMany({
+      where: { userId: authUser.id },
+      orderBy: { createdAt: 'desc' },
+    });
+
+    return NextResponse.json({ orders: orders.map(serializeOrder) });
+  } catch (err) {
+    console.error('Erro ao buscar pedidos:', err);
+    return NextResponse.json({ error: 'Erro ao buscar pedidos.' }, { status: 500 });
+  }
+}
