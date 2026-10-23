@@ -31,6 +31,7 @@ type AddInput = {
   originalPrice?: number;
   variacao?: string;
   size?: string;
+  dimensions?: any;
   imagem?: string;
   image?: string;
   weight?: number;
