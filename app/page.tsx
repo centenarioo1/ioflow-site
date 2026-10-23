@@ -28,14 +28,13 @@ import SiteFooter from '@/components/SiteFooter';
 import TrustBar from '@/components/TrustBar';
 import WhatsAppButton from '@/components/WhatsAppButton';
 
-type Produto = {
-  categoria: string;
-  [key: string]: any; // Permite outras propriedades (id, nome, etc)
-};
+// Importe o tipo Product junto com a lista de produtos
+import { products as produtos, type Product } from '@/lib/products';
 
-const nutrientes = (produtos as Produto[]).filter((p) => p.categoria === 'nutriente');
-const solos = (produtos as Produto[]).filter((p) => p.categoria === 'solo' || p.categoria === 'substrato');
-const emendas = (produtos as Produto[]).filter((p) => p.categoria === 'emenda');
+// Converta os produtos para o tipo correto no filtro
+const nutrientes = (produtos as Product[]).filter((p) => p.categoria === 'nutriente');
+const solos = (produtos as Product[]).filter((p) => p.categoria === 'solo' || p.categoria === 'substrato');
+const emendas = (produtos as Product[]).filter((p) => p.categoria === 'emenda');
 
 const faqItems = [
   { 
