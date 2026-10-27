@@ -131,7 +131,7 @@ export default function CarrinhoPage() {
 
       const data = await res.json();
       if (!res.ok) {
-        throw new Error(data.error || 'Erro ao calcular.');
+        throw new Error(data.error || 'Erro ao calcular frete.');
       }
 
       const opcoesCalculadas = data.opcoes || [];
@@ -145,14 +145,17 @@ export default function CarrinhoPage() {
             valor: primeiraOpcao.valor,
           });
         }
+      } else {
+        setFreteErro('Nenhuma opção de entrega encontrada para o CEP informado.');
       }
     } catch (err: any) {
-      console.warn('Usando fallback offline:', err);
+      console.warn('Usando fallback offline contendo opções calculadas:', err);
+      // Tabela de fallback sem forçar valor 0.00 artificialmente no subtotal
       const fallbackOptions = [
-        { nome: 'Correios (SEDEX)', valor: subtotal > 150 ? 0 : 22.50, prazo: 3 },
-        { nome: 'Correios (PAC)', valor: subtotal > 150 ? 0 : 14.90, prazo: 7 },
-        { nome: 'Jadlog (.COM)', valor: subtotal > 150 ? 0 : 18.20, prazo: 5 },
-        { nome: 'Jadlog (PACKAGE)', valor: subtotal > 150 ? 0 : 16.50, prazo: 6 }
+        { nome: 'Correios (SEDEX)', valor: 22.50, prazo: 3 },
+        { nome: 'Correios (PAC)', valor: 14.90, prazo: 7 },
+        { nome: 'Jadlog (.COM)', valor: 18.20, prazo: 5 },
+        { nome: 'Jadlog (PACKAGE)', valor: 16.50, prazo: 6 }
       ];
       setFreteOpcoes(fallbackOptions);
       const primeiraOpcaoSimulada = fallbackOptions.at(0);
@@ -323,7 +326,7 @@ export default function CarrinhoPage() {
                       style={{ background: 'white', border: '1px solid #e7e2d6', borderRadius: 16, padding: 20, display: 'flex', gap: 16, alignItems: 'center', flexWrap: 'wrap', justifyContent: 'space-between' }}
                     >
                       <div style={{ display: 'flex', gap: 16, alignItems: 'center', flex: 1, minWidth: 240 }}>
-                        {/* 🟢 MINIATURA DA IMAGEM DO PRODUTO */}
+                        {/* MINIATURA DA IMAGEM DO PRODUTO */}
                         {imgUrl ? (
                           <img 
                             src={imgUrl} 

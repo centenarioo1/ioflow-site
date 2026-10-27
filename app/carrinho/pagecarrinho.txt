@@ -1,3 +1,4 @@
+// app/carrinho/page.tsx
 'use client';
 
 import React, { useEffect, useState } from 'react';
@@ -86,7 +87,7 @@ export default function CarrinhoPage() {
   }
 
   // Cálculos de Valores
-  const subtotal = items.reduce((acc, it) => acc + (it.preco * it.quantity), 0);
+  const subtotal = items.reduce((acc, it) => acc + ((it.preco || (it as any).price || 0) * it.quantity), 0);
   const valorFrete = freteSelecionado ? freteSelecionado.valor : 0;
   const valorDesconto = cupomAplicado ? cupomAplicado.desconto : 0;
   const total = Math.max(0, subtotal + valorFrete - valorDesconto);
@@ -146,7 +147,7 @@ export default function CarrinhoPage() {
         }
       }
     } catch (err: any) {
-      console.warn('Usando fallback offline contendo todas as opções do Sandbox:', err);
+      console.warn('Usando fallback offline:', err);
       const fallbackOptions = [
         { nome: 'Correios (SEDEX)', valor: subtotal > 150 ? 0 : 22.50, prazo: 3 },
         { nome: 'Correios (PAC)', valor: subtotal > 150 ? 0 : 14.90, prazo: 7 },
@@ -166,7 +167,7 @@ export default function CarrinhoPage() {
     }
   };
 
-  // Validação de cupons via Prisma
+  // Validação de cupons via API
   const handleAplicarCupom = async (e: React.FormEvent) => {
     e.preventDefault();
     setCupomErro('');
@@ -198,7 +199,7 @@ export default function CarrinhoPage() {
     }
   };
 
-  // Finalização de Compra Integrada com seu route.ts do Mercado Pago
+  // Finalização de Compra Integrada com o Mercado Pago
   const handleFinalizarCompra = async () => {
     setErroCheckout('');
 
@@ -207,7 +208,6 @@ export default function CarrinhoPage() {
       return;
     }
 
-    // Validação de campos de Endereço antes de enviar
     if (!rua || !numero || !bairro || !cidade || !estado) {
       setErroCheckout('Por favor, preencha todos os campos do endereço de entrega antes de finalizar.');
       return;
@@ -215,16 +215,14 @@ export default function CarrinhoPage() {
 
     setLoadingCheckout(true);
     try {
-      // ✅ MAPEAMENTO SEGURO: Converte os nomes do store para bater com a estrutura CartItem do route.ts
       const mpItems = items.map(it => ({
-        id: it.productId,
-        name: it.nome,
-        price: Number(it.preco),
+        id: it.productId || it.id,
+        name: it.nome || (it as any).name,
+        price: Number(it.preco || (it as any).price || 0),
         quantity: Number(it.quantity),
-        size: it.variacao || 'Padrão'
+        size: it.variacao || (it as any).size || 'Padrão'
       }));
 
-      // ✅ REQUISIÇÃO OFICIAL: Chamando a rota de API correta
       const res = await fetch('/api/mercadopago/create-preference', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -240,12 +238,12 @@ export default function CarrinhoPage() {
           shippingServiceName: freteSelecionado?.nome || 'Padrão',
           address: {
             cep: cep.replace(/\D/g, ''),
-            rua: rua,
-            numero: numero,
-            complemento: complemento,
-            bairro: bairro,
-            cidade: cidade,
-            estado: estado
+            rua,
+            numero,
+            complemento,
+            bairro,
+            cidade,
+            estado
           }
         }),
       });
@@ -254,7 +252,7 @@ export default function CarrinhoPage() {
       if (!contentType || !contentType.includes("application/json")) {
         const textoErro = await res.text();
         console.error("Erro bruto do servidor:", textoErro);
-        throw new Error(`Erro do servidor (${res.status}). Verifique as variáveis de ambiente no .env.local.`);
+        throw new Error(`Erro do servidor (${res.status}). Verifique as variáveis de ambiente.`);
       }
 
       const data = await res.json();
@@ -262,10 +260,8 @@ export default function CarrinhoPage() {
         throw new Error(data.error || 'Erro ao processar o checkout.');
       }
 
-      // Limpa o carrinho local
       clearCart();
 
-      // Redireciona para o link gerado do Mercado Pago
       if (data.initPoint) {
         window.location.href = data.initPoint;
       } else {
@@ -315,57 +311,84 @@ export default function CarrinhoPage() {
               {/* Lista de Itens */}
               <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
                 <h2 style={{ fontSize: 16, fontWeight: 900, color: '#0d2410', margin: 0 }}>Produtos no Carrinho</h2>
-                {items.map((item) => (
-                  <div key={`${item.productId}-${item.variantId || 'unica'}`} style={{ background: 'white', border: '1px solid #e7e2d6', borderRadius: 16, padding: 20, display: 'flex', gap: 16, alignItems: 'center', flexWrap: 'wrap', justifyContent: 'space-between' }}>
-                    <div style={{ display: 'flex', gap: 16, alignItems: 'center', flex: 1, minWidth: 240 }}>
-                      <div style={{ width: 64, height: 64, background: '#f3f4f6', borderRadius: 12, display: 'flex', alignItems: 'center', justifyContent: 'center', border: '1px solid #e5e7eb' }}>
-                        <ShoppingBag size={28} color="#15803d" />
-                      </div>
-                      <div>
-                        <h3 style={{ fontSize: 15, fontWeight: 800, margin: '0 0 4px', color: '#111827' }}>{item.nome}</h3>
-                        {item.variacao && (
-                          <span style={{ fontSize: 12, background: '#f3f4f6', padding: '3px 8px', borderRadius: 6, color: '#4b5563', fontWeight: 600 }}>
-                            Variação: {item.variacao}
-                          </span>
+                {items.map((item) => {
+                  const imgUrl = item.imagem || (item as any).image;
+                  const nameStr = item.nome || (item as any).name || 'Produto';
+                  const sizeStr = item.variacao || (item as any).size;
+                  const unitPrice = item.preco || (item as any).price || 0;
+
+                  return (
+                    <div 
+                      key={`${item.productId || item.id}-${item.variantId || sizeStr || 'unica'}`} 
+                      style={{ background: 'white', border: '1px solid #e7e2d6', borderRadius: 16, padding: 20, display: 'flex', gap: 16, alignItems: 'center', flexWrap: 'wrap', justifyContent: 'space-between' }}
+                    >
+                      <div style={{ display: 'flex', gap: 16, alignItems: 'center', flex: 1, minWidth: 240 }}>
+                        {/* 🟢 MINIATURA DA IMAGEM DO PRODUTO */}
+                        {imgUrl ? (
+                          <img 
+                            src={imgUrl} 
+                            alt={nameStr} 
+                            style={{ 
+                              width: 64, 
+                              height: 64, 
+                              objectFit: 'cover', 
+                              borderRadius: 12, 
+                              border: '1px solid #e5e7eb',
+                              flexShrink: 0 
+                            }} 
+                          />
+                        ) : (
+                          <div style={{ width: 64, height: 64, background: '#f3f4f6', borderRadius: 12, display: 'flex', alignItems: 'center', justifyContent: 'center', border: '1px solid #e5e7eb', flexShrink: 0 }}>
+                            <ShoppingBag size={28} color="#15803d" />
+                          </div>
                         )}
-                        <p style={{ fontSize: 14, fontWeight: 700, color: '#15803d', margin: '6px 0 0' }}>{fmt(item.preco)}</p>
+
+                        <div>
+                          <h3 style={{ fontSize: 15, fontWeight: 800, margin: '0 0 4px', color: '#111827' }}>{nameStr}</h3>
+                          {sizeStr && (
+                            <span style={{ fontSize: 12, background: '#f3f4f6', padding: '3px 8px', borderRadius: 6, color: '#4b5563', fontWeight: 600 }}>
+                              Variação: {sizeStr}
+                            </span>
+                          )}
+                          <p style={{ fontSize: 14, fontWeight: 700, color: '#15803d', margin: '6px 0 0' }}>{fmt(unitPrice)}</p>
+                        </div>
+                      </div>
+
+                      <div style={{ display: 'flex', alignItems: 'center', gap: 20 }}>
+                        <div style={{ display: 'flex', alignItems: 'center', border: '1px solid #d1d5db', borderRadius: 8, background: '#f9fafb' }}>
+                          <button 
+                            onClick={() => updateQuantity(item.id, Math.max(1, item.quantity - 1), sizeStr)}
+                            style={{ background: 'none', border: 'none', padding: '8px 12px', cursor: 'pointer', display: 'flex', alignItems: 'center' }}
+                          >
+                            <Minus size={13} color="#4b5563" />
+                          </button>
+                          <span style={{ fontSize: 13, fontWeight: 800, width: 20, textAlign: 'center', color: '#111827' }}>{item.quantity}</span>
+                          <button 
+                            onClick={() => updateQuantity(item.id, item.quantity + 1, sizeStr)}
+                            style={{ background: 'none', border: 'none', padding: '8px 12px', cursor: 'pointer', display: 'flex', alignItems: 'center' }}
+                          >
+                            <Plus size={13} color="#4b5563" />
+                          </button>
+                        </div>
+
+                        <div style={{ textAlign: 'right', minWidth: 80 }}>
+                          <p style={{ fontSize: 14, fontWeight: 800, color: '#111827', margin: 0 }}>{fmt(unitPrice * item.quantity)}</p>
+                        </div>
+
+                        <button 
+                          onClick={() => removeItem(item.id, sizeStr)}
+                          style={{ background: 'none', border: 'none', color: '#dc2626', cursor: 'pointer', padding: 8, borderRadius: 8, display: 'flex', alignItems: 'center', justifyContent: 'center' }}
+                          title="Remover produto"
+                        >
+                          <Trash2 size={18} />
+                        </button>
                       </div>
                     </div>
-
-                    <div style={{ display: 'flex', alignItems: 'center', gap: 20 }}>
-                      <div style={{ display: 'flex', alignItems: 'center', border: '1px solid #d1d5db', borderRadius: 8, background: '#f9fafb' }}>
-                        <button 
-                          onClick={() => updateQuantity(item.productId, item.variantId, Math.max(1, item.quantity - 1))}
-                          style={{ background: 'none', border: 'none', padding: '8px 12px', cursor: 'pointer', display: 'flex', alignItems: 'center' }}
-                        >
-                          <Minus size={13} color="#4b5563" />
-                        </button>
-                        <span style={{ fontSize: 13, fontWeight: 800, width: 20, textAlign: 'center', color: '#111827' }}>{item.quantity}</span>
-                        <button 
-                          onClick={() => updateQuantity(item.productId, item.variantId, item.quantity + 1)}
-                          style={{ background: 'none', border: 'none', padding: '8px 12px', cursor: 'pointer', display: 'flex', alignItems: 'center' }}
-                        >
-                          <Plus size={13} color="#4b5563" />
-                        </button>
-                      </div>
-
-                      <div style={{ textAlign: 'right', minWidth: 80 }}>
-                        <p style={{ fontSize: 14, fontWeight: 800, color: '#111827', margin: 0 }}>{fmt(item.preco * item.quantity)}</p>
-                      </div>
-
-                      <button 
-                        onClick={() => removeItem(item.productId, item.variantId)}
-                        style={{ background: 'none', border: 'none', color: '#dc2626', cursor: 'pointer', padding: 8, borderRadius: 8, display: 'flex', alignItems: 'center', justifyContent: 'center' }}
-                        title="Remover produto"
-                      >
-                        <Trash2 size={18} />
-                      </button>
-                    </div>
-                  </div>
-                ))}
+                  );
+                })}
               </div>
 
-              {/* Formulário Dados de Entrega (Aparece apenas se estiver logado) */}
+              {/* Formulário Dados de Entrega (Se estiver logado) */}
               {isLogged ? (
                 <div style={{ background: 'white', border: '1px solid #e7e2d6', borderRadius: 20, padding: 24 }}>
                   <h2 style={{ fontSize: 16, fontWeight: 900, marginBottom: 16, display: 'flex', alignItems: 'center', gap: 8, color: '#0d2410' }}>
@@ -494,7 +517,7 @@ export default function CarrinhoPage() {
                 </button>
               </div>
 
-              {/* Card de Cálculo de Frete Multitransportadora */}
+              {/* Card de Cálculo de Frete */}
               <div style={{ background: 'white', border: '1px solid #e7e2d6', borderRadius: 20, padding: 20 }}>
                 <h3 style={{ fontSize: 14, fontWeight: 900, marginBottom: 10, display: 'flex', alignItems: 'center', gap: 6, color: '#0d2410' }}>
                   <Truck size={16} color="#15803d" /> Opções de Entrega
@@ -518,7 +541,6 @@ export default function CarrinhoPage() {
 
                 {freteErro && <p style={{ fontSize: 12, color: '#b91c1c', marginTop: 8, fontWeight: 600 }}>{freteErro}</p>}
                 
-                {/* Lista dinâmica de opções de frete (Suporta Correios SEDEX, PAC e Jadlog) */}
                 {freteOpcoes.length > 0 && (
                   <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
                     {freteOpcoes.map((opcao) => (

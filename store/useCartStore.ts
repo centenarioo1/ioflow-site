@@ -14,9 +14,13 @@ export interface CartItem {
   variacao?: string;
   size?: string;
   imagem?: string;
-  dimensions?: any;
   image?: string;
-  weight?: number;        // peso em gramas
+  dimensions?: {
+    height: number;
+    width: number;
+    length: number;
+  } | any;
+  weight?: number;        // peso em gramas ou kg
   quantity: number;
 }
 
@@ -57,6 +61,7 @@ function normalize(input: AddInput): Omit<CartItem, 'quantity'> {
     size: variacao,
     imagem,
     image: imagem,
+    dimensions: input.dimensions, // CORRIGIDO: Preserva as dimensões do produto no carrinho
     weight: input.weight,
   };
 }
