@@ -330,3 +330,6 @@ export function getProdutoPorId(id: string): Product | undefined {
 export function getProdutoPorSlug(slug: string): Product | undefined {
   return products.find((p) => p.slug === slug);
 }
+
+// Export default para suportar tanto importacoes nomeadas quanto padrao no Next.js
+export default products;

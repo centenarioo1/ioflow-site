@@ -1,7 +1,7 @@
 // app/api/mercadopago/create-preference/route.ts
 import { NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
-import catalogoBase from '@/lib/products';
+import { products, produtos } from '@/lib/products';
 
 export async function POST(req: Request) {
   try {
@@ -27,35 +27,39 @@ export async function POST(req: Request) {
       return NextResponse.json({ error: 'Dados do comprador ou endereço incompletos' }, { status: 400 });
     }
 
+    const catalogList = (products || produtos || []) as any[];
+
     // 1. REVALIDAÇÃO DE PREÇOS NO SERVIDOR (Previne adulteração de valores)
     let subtotalOficial = 0;
     const validatedItems = [];
 
     for (const clientItem of items) {
       let realVariant = null;
-      let realProductName = String(clientItem.name || 'Produto');
+      let realProductName = String(clientItem.name || clientItem.nome || 'Produto');
 
       // Procura a variante correspondente no catálogo oficial do servidor
-      for (const prod of catalogoBase) {
-        const found = prod.variants.find(
-          (v) => String(v.id) === String(clientItem.id) || String(v.id) === String(clientItem.variantId)
-        );
-        if (found) {
-          realVariant = found;
-          realProductName = prod.name;
-          break;
+      for (const prod of catalogList) {
+        if (prod.variants && Array.isArray(prod.variants)) {
+          const found = prod.variants.find(
+            (v: any) => String(v.id) === String(clientItem.id) || String(v.id) === String(clientItem.variantId)
+          );
+          if (found) {
+            realVariant = found;
+            realProductName = prod.name || prod.nome || realProductName;
+            break;
+          }
         }
       }
 
       // Se encontrar no catálogo, usa o preço oficial do servidor; caso contrário, usa o enviado com fallback
-      const unitPrice = realVariant ? realVariant.price : Number(clientItem.price || 0);
+      const unitPrice = realVariant ? Number(realVariant.price) : Number(clientItem.price || clientItem.preco || 0);
       const quantity = Math.max(1, Number(clientItem.quantity || 1));
 
       subtotalOficial += unitPrice * quantity;
 
       validatedItems.push({
         id: String(clientItem.id || 'item'),
-        title: `${realProductName} (${realVariant?.size || clientItem.size || 'Padrão'})`,
+        title: `${realProductName} (${realVariant?.size || clientItem.size || clientItem.variacao || 'Padrão'})`,
         quantity,
         currency_id: 'BRL',
         unit_price: unitPrice,
@@ -146,7 +150,7 @@ export async function POST(req: Request) {
       });
     }
 
-    const mpUrl = process.env.MP_CHECKOUT_URL || '';
+    const mpUrl = process.env.MP_CHECKOUT_URL || '[suspicious link removed]';
 
     const preferenceRes = await fetch(mpUrl, {
       method: 'POST',
