@@ -65,9 +65,9 @@ const catalogoBase: ProductBase[] = [
     features: ['Composição nobre com húmus e perlita', 'Excelente capacidade de drenagem e aeração', 'Pronto para o plantio'],
     images: ['/images/products/substrato-rico.jpg'],
     variants: [
-      { id: '219187113534', size: '5L', price: 24.00, originalPrice: 30.00, stock: 117, weight: 1300, dimensions: { height: 8, width: 25, length: 35 } },
-      { id: '219187113535', size: '10L', price: 36.80, originalPrice: 46.00, stock: 117, weight: 2600, dimensions: { height: 12, width: 30, length: 40 } },
-      { id: '219187113536', size: '20L', price: 67.20, originalPrice: 84.00, stock: 117, weight: 4000, dimensions: { height: 15, width: 30, length: 50 } },
+      { id: '219187113534', size: '5L', price: 32.50, originalPrice: 36.90, stock: 117, weight: 1300, dimensions: { height: 8, width: 25, length: 35 } },
+      { id: '219187113535', size: '10L', price: 49.90, originalPrice: 56.90, stock: 117, weight: 2600, dimensions: { height: 12, width: 30, length: 40 } },
+      { id: '219187113536', size: '20L', price: 90.90, originalPrice: 103.50, stock: 117, weight: 4000, dimensions: { height: 15, width: 30, length: 50 } },
     ],
   },
   {
@@ -79,9 +79,9 @@ const catalogoBase: ProductBase[] = [
     features: ['Nutrição orgânica de liberação lenta', 'Ideal para cultivo orgânico', 'Estrutura biológica viva'],
     images: ['/images/products/super-solo.jpg'],
     variants: [
-      { id: '129655730543', size: '5L', price: 24.00, originalPrice: 30.00, stock: 107, weight: 1300, dimensions: { height: 8, width: 25, length: 35 } },
-      { id: '129655730544', size: '10L', price: 36.80, originalPrice: 46.00, stock: 117, weight: 2600, dimensions: { height: 12, width: 30, length: 40 } },
-      { id: '129655730545', size: '20L', price: 67.20, originalPrice: 84.00, stock: 117, weight: 4000, dimensions: { height: 15, width: 30, length: 50 } },
+      { id: '129655730543', size: '5L', price: 32.50, originalPrice: 36.90, stock: 107, weight: 1300, dimensions: { height: 8, width: 25, length: 35 } },
+      { id: '129655730544', size: '10L', price: 49.90, originalPrice: 56.90, stock: 117, weight: 2600, dimensions: { height: 12, width: 30, length: 40 } },
+      { id: '129655730545', size: '20L', price: 90.90, originalPrice: 103.50, stock: 117, weight: 4000, dimensions: { height: 15, width: 30, length: 50 } },
     ],
   },
   {
@@ -93,9 +93,9 @@ const catalogoBase: ProductBase[] = [
     features: ['Leveza estrutural superior', 'Perfeita relação ar/água para as raízes', 'Ideal para cultivo indoor e estufas'],
     images: ['/images/products/biomix.jpg'],
     variants: [
-      { id: '139655647764', size: '2L', price: 11.92, originalPrice: 14.90, stock: 100, weight: 500, dimensions: { height: 5, width: 20, length: 30 } },
-      { id: '238802853732', size: '10L', price: 36.80, originalPrice: 46.00, stock: 117, weight: 2600, dimensions: { height: 12, width: 30, length: 40 } },
-      { id: '238802853733', size: '20L', price: 67.20, originalPrice: 84.00, stock: 55, weight: 4710, dimensions: { height: 20, width: 37, length: 50 } },
+      { id: '139655647764', size: '2L', price: 15.90, originalPrice: 18.50, stock: 100, weight: 500, dimensions: { height: 5, width: 20, length: 30 } },
+      { id: '238802853732', size: '10L', price: 49.90, originalPrice: 56.90, stock: 117, weight: 2600, dimensions: { height: 12, width: 30, length: 40 } },
+      { id: '238802853733', size: '20L', price: 90.90, originalPrice: 103.50, stock: 55, weight: 4710, dimensions: { height: 20, width: 37, length: 50 } },
     ],
   },
   {
@@ -107,7 +107,7 @@ const catalogoBase: ProductBase[] = [
     features: ['Substrato inerte de alta pureza', 'Total controle de fertirrigação', 'Volume para grandes cultivos'],
     images: ['/images/products/sphagnotec.jpg'],
     variants: [
-      { id: '179725725743', size: '50L', price: 63.20, originalPrice: 79.00, stock: 17, weight: 4000, dimensions: { height: 30, width: 30, length: 70 } },
+      { id: '179725725743', size: '50L', price: 85.50, originalPrice: 97.50, stock: 17, weight: 4000, dimensions: { height: 30, width: 30, length: 70 } },
     ],
   },
   {
@@ -119,9 +119,9 @@ const catalogoBase: ProductBase[] = [
     features: ['Fibra de coco tratada e lavada', 'Alta oxigenação radicular', 'Excelente custo-benefício'],
     images: ['/images/products/coco-perlita.jpg'],
     variants: [
-      { id: '159552993387', size: '5L', price: 17.60, originalPrice: 22.00, stock: 100, weight: 1000, dimensions: { height: 8, width: 25, length: 35 } },
-      { id: '159552993384', size: '10L', price: 27.20, originalPrice: 34.00, stock: 117, weight: 2000, dimensions: { height: 12, width: 30, length: 40 } },
-      { id: '159552993385', size: '20L', price: 43.20, originalPrice: 54.00, stock: 117, weight: 4000, dimensions: { height: 15, width: 35, length: 45 } },
+      { id: '159552993387', size: '5L', price: 32.50, originalPrice: 36.90, stock: 100, weight: 1000, dimensions: { height: 8, width: 25, length: 35 } },
+      { id: '159552993384', size: '10L', price: 49.90, originalPrice: 56.90, stock: 117, weight: 2000, dimensions: { height: 12, width: 30, length: 40 } },
+      { id: '159552993385', size: '20L', price: 90.90, originalPrice: 103.50, stock: 117, weight: 4000, dimensions: { height: 15, width: 35, length: 45 } },
     ],
   },
 
@@ -137,10 +137,10 @@ const catalogoBase: ProductBase[] = [
     features: ['Granulometria grossa', '100% estéril e inerte', 'Evita compactação do solo'],
     images: ['/images/products/perlita.jpg'],
     variants: [
-      { id: '189619447329', size: '2L', price: 11.92, originalPrice: 14.90, stock: 100, weight: 500, dimensions: { height: 5, width: 20, length: 30 } },
-      { id: '199186920053', size: '5L', price: 20.00, originalPrice: 25.00, stock: 100, weight: 1000, dimensions: { height: 8, width: 25, length: 35 } },
-      { id: '199186920054', size: '10L', price: 28.00, originalPrice: 35.00, stock: 100, weight: 2000, dimensions: { height: 12, width: 30, length: 40 } },
-      { id: '129655658497', size: '20L', price: 54.40, originalPrice: 68.00, stock: 117, weight: 3000, dimensions: { height: 15, width: 35, length: 45 } },
+      { id: '189619447329', size: '2L', price: 15.90, originalPrice: 18.50, stock: 100, weight: 500, dimensions: { height: 5, width: 20, length: 30 } },
+      { id: '199186920053', size: '5L', price: 31.50, originalPrice: 35.90, stock: 100, weight: 1000, dimensions: { height: 8, width: 25, length: 35 } },
+      { id: '199186920054', size: '10L', price: 45.50, originalPrice: 51.90, stock: 100, weight: 2000, dimensions: { height: 12, width: 30, length: 40 } },
+      { id: '129655658497', size: '20L', price: 84.90, originalPrice: 96.50, stock: 117, weight: 3000, dimensions: { height: 15, width: 35, length: 45 } },
     ],
   },
   {
@@ -152,10 +152,10 @@ const catalogoBase: ProductBase[] = [
     features: ['Baixa condutividade elétrica (EC)', 'PH estável entre 5.8 e 6.5', 'Retenção uniforme de umidade'],
     images: ['/images/products/fibra-coco.jpg'],
     variants: [
-      { id: '159790972294', size: '2L', price: 11.92, originalPrice: 14.90, stock: 100, weight: 500, dimensions: { height: 5, width: 20, length: 30 } },
-      { id: '199186998969', size: '5L', price: 13.60, originalPrice: 17.00, stock: 117, weight: 1000, dimensions: { height: 8, width: 25, length: 35 } },
-      { id: '189619365173', size: '10L', price: 17.60, originalPrice: 22.00, stock: 100, weight: 2000, dimensions: { height: 12, width: 30, length: 40 } },
-      { id: '189619365174', size: '20L', price: 38.40, originalPrice: 48.00, stock: 117, weight: 4000, dimensions: { height: 15, width: 35, length: 45 } },
+      { id: '159790972294', size: '2L', price: 15.90, originalPrice: 18.50, stock: 100, weight: 500, dimensions: { height: 5, width: 20, length: 30 } },
+      { id: '199186998969', size: '5L', price: 26.90, originalPrice: 30.70, stock: 117, weight: 1000, dimensions: { height: 8, width: 25, length: 35 } },
+      { id: '189619365173', size: '10L', price: 33.50, originalPrice: 38.50, stock: 100, weight: 2000, dimensions: { height: 12, width: 30, length: 40 } },
+      { id: '189619365174', size: '20L', price: 61.90, originalPrice: 70.50, stock: 117, weight: 4000, dimensions: { height: 15, width: 35, length: 45 } },
     ],
   },
   {
@@ -167,31 +167,16 @@ const catalogoBase: ProductBase[] = [
     features: ['Rica em silício orgânico', 'Evita proliferação de fungos', 'Melhora retenção de nutrientes'],
     images: ['/images/products/casca-arroz.jpg'],
     variants: [
-      { id: '219186987101', size: '2L', price: 12.72, originalPrice: 15.90, stock: 122, weight: 500, dimensions: { height: 5, width: 20, length: 30 } },
-      { id: '199186987056', size: '10L', price: 14.40, originalPrice: 18.00, stock: 100, weight: 1000, dimensions: { height: 12, width: 30, length: 40 } },
-      { id: '149790922409', size: '20L', price: 21.60, originalPrice: 27.00, stock: 100, weight: 2000, dimensions: { height: 15, width: 35, length: 45 } },
-      { id: '189187594669', size: '50L', price: 44.00, originalPrice: 55.00, stock: 100, weight: 4000, dimensions: { height: 30, width: 40, length: 50 } },
+      { id: '219186987101', size: '2L', price: 16.90, originalPrice: 19.50, stock: 122, weight: 500, dimensions: { height: 5, width: 20, length: 30 } },
+      { id: '199186987056', size: '10L', price: 19.50, originalPrice: 22.50, stock: 100, weight: 1000, dimensions: { height: 12, width: 30, length: 40 } },
+      { id: '149790922409', size: '20L', price: 28.90, originalPrice: 32.90, stock: 100, weight: 2000, dimensions: { height: 15, width: 35, length: 45 } },
+      { id: '189187594669', size: '50L', price: 59.50, originalPrice: 67.70, stock: 100, weight: 4000, dimensions: { height: 30, width: 40, length: 50 } },
     ],
   },
 
   // ==========================================
   // 3. ADUBOS ORGÂNICOS
   // ==========================================
-  {
-    id: '23799380532',
-    slug: 'esterco-de-galinha-adubo-organico-compostado',
-    name: 'Esterco de Galinha Adubo Orgânico Compostado BIOFLOW',
-    category: 'adubos',
-    description: 'Adubo orgânico curtido e estabilizado, rico em nitrogênio, cálcio e fósforo para nutrição vigorosa.',
-    features: ['100% curtido e sem odor forte', 'Excelente aporte de Nitrogênio e Cálcio', 'Ativa a microbiota do solo'],
-    images: ['/images/products/esterco-galinha.jpg'],
-    variants: [
-      { id: '109872917980', size: '2KG', price: 13.52, originalPrice: 16.90, stock: 98, weight: 2000, dimensions: { height: 8, width: 30, length: 20 } },
-      { id: '238802917544', size: '5KG', price: 25.60, originalPrice: 32.00, stock: 105, weight: 5000, dimensions: { height: 8, width: 35, length: 25 } },
-      { id: '139655648369', size: '10KG', price: 33.60, originalPrice: 42.00, stock: 52, weight: 10000, dimensions: { height: 12, width: 40, length: 30 } },
-      { id: '238802917545', size: '20KG', price: 40.00, originalPrice: 50.00, stock: 23, weight: 20000, dimensions: { height: 15, width: 45, length: 35 } },
-    ],
-  },
   {
     id: '23899358271',
     slug: 'torta-de-mamona-adubo-organico',
@@ -201,10 +186,10 @@ const catalogoBase: ProductBase[] = [
     features: ['Alto teor de nitrogênio orgânico', 'Liberação gradual de nutrientes', 'Favorece desenvolvimento vegetativo'],
     images: ['/images/products/torta-mamona.jpg'],
     variants: [
-      { id: '159790961066', size: '2KG', price: 14.32, originalPrice: 17.90, stock: 100, weight: 2000, dimensions: { height: 8, width: 30, length: 20 } },
-      { id: '229439512497', size: '5KG', price: 30.40, originalPrice: 38.00, stock: 163, weight: 5000, dimensions: { height: 8, width: 35, length: 25 } },
-      { id: '229439512498', size: '10KG', price: 53.60, originalPrice: 67.00, stock: 117, weight: 10000, dimensions: { height: 12, width: 40, length: 30 } },
-      { id: '229439512499', size: '20KG', price: 88.00, originalPrice: 110.00, stock: 34, weight: 20000, dimensions: { height: 15, width: 45, length: 35 } },
+      { id: '159790961066', size: '2KG', price: 19.50, originalPrice: 22.50, stock: 100, weight: 2000, dimensions: { height: 8, width: 30, length: 20 } },
+      { id: '229439512497', size: '5KG', price: 34.90, originalPrice: 39.70, stock: 163, weight: 5000, dimensions: { height: 8, width: 35, length: 25 } },
+      { id: '229439512498', size: '10KG', price: 72.50, originalPrice: 82.50, stock: 117, weight: 10000, dimensions: { height: 12, width: 40, length: 30 } },
+      { id: '229439512499', size: '20KG', price: 129.90, originalPrice: 147.70, stock: 34, weight: 20000, dimensions: { height: 15, width: 45, length: 35 } },
     ],
   },
   {
@@ -216,30 +201,12 @@ const catalogoBase: ProductBase[] = [
     features: ['Rico em ácidos húmicos e fúlvicos', 'Melhora capacidade de retenção de água', 'Totalmente atóxico'],
     images: ['/images/products/humus-minhoca.jpg'],
     variants: [
-      { id: '199187589658', size: '2KG', price: 14.32, originalPrice: 17.90, stock: 100, weight: 2000, dimensions: { height: 8, width: 30, length: 20 } },
-      { id: '238802856194', size: '5KG', price: 24.00, originalPrice: 30.00, stock: 100, weight: 5000, dimensions: { height: 8, width: 35, length: 25 } },
-      { id: '229439358068', size: '10KG', price: 33.60, originalPrice: 42.00, stock: 100, weight: 10000, dimensions: { height: 12, width: 40, length: 30 } },
-      { id: '179414529814', size: '20KG', price: 44.80, originalPrice: 56.00, stock: 100, weight: 20000, dimensions: { height: 15, width: 45, length: 35 } },
+      { id: '199187589658', size: '2KG', price: 19.50, originalPrice: 22.50, stock: 100, weight: 2000, dimensions: { height: 8, width: 30, length: 20 } },
+      { id: '238802856194', size: '5KG', price: 32.50, originalPrice: 36.90, stock: 100, weight: 5000, dimensions: { height: 8, width: 35, length: 25 } },
+      { id: '229439358068', size: '10KG', price: 45.50, originalPrice: 51.90, stock: 100, weight: 10000, dimensions: { height: 12, width: 40, length: 30 } },
+      { id: '179414529814', size: '20KG', price: 60.90, originalPrice: 69.50, stock: 100, weight: 20000, dimensions: { height: 15, width: 45, length: 35 } },
     ],
   },
-  {
-    id: '58207071893',
-    slug: 'humus-de-minhoca-puro-sem-terra',
-    name: 'Humus de Minhoca Puro Sem Terra Adubo Forte BIOFLOW',
-    category: 'adubos',
-    description: 'Húmus 100% puro peneirado, sem adição de terra, máxima concentração de nutrientes orgânicos.',
-    features: ['Pureza máxima sem terra misturada', 'Peneirado e homogêneo', 'Ativação imediata da vida do solo'],
-    images: ['/images/products/humus-puro.jpg'],
-    variants: [
-      { id: '238803166585', size: '5KG', price: 36.00, originalPrice: 45.00, stock: 100, weight: 5000, dimensions: { height: 8, width: 35, length: 25 } },
-      { id: '238803166583', size: '10KG', price: 44.00, originalPrice: 55.00, stock: 100, weight: 10000, dimensions: { height: 12, width: 40, length: 30 } },
-      { id: '238803166584', size: '20KG', price: 75.60, originalPrice: 94.50, stock: 100, weight: 20000, dimensions: { height: 15, width: 45, length: 35 } },
-    ],
-  },
-
-  // ==========================================
-  // 4. FERTILIZANTES & ESTIMULANTES LÍQUIDOS
-  // ==========================================
   {
     id: '58256234535',
     slug: 'bio-em1-compostagem-enraizador-microorganismos',
@@ -249,8 +216,8 @@ const catalogoBase: ProductBase[] = [
     features: ['Consórcio de micro-organismos eficientes', 'Acelera decomposição e enraizamento', 'Restaura a saúde de solos cansados'],
     images: ['/images/products/bio-em1.jpg'],
     variants: [
-      { id: '239439356486', size: '250ml', price: 28.00, originalPrice: 35.00, stock: 100, weight: 500, dimensions: { height: 8, width: 3, length: 4 } },
-      { id: '239439356487', size: '1L', price: 43.20, originalPrice: 54.00, stock: 50, weight: 1000, dimensions: { height: 15, width: 5, length: 8 } },
+      { id: '239439356486', size: '250ml', price: 37.90, originalPrice: 43.50, stock: 100, weight: 500, dimensions: { height: 8, width: 3, length: 4 } },
+      { id: '239439356487', size: '1L', price: 58.50, originalPrice: 66.50, stock: 50, weight: 1000, dimensions: { height: 15, width: 5, length: 8 } },
     ],
   },
   {
@@ -262,7 +229,7 @@ const catalogoBase: ProductBase[] = [
     features: ['Explosão de enraizamento', 'Reduz o estresse pós-transplante', 'Ideal para clones e mudas jovens'],
     images: ['/images/products/bio-start.jpg'],
     variants: [
-      { id: '228801785804', size: '250ml', price: 36.00, originalPrice: 45.00, stock: 37, weight: 400, dimensions: { height: 8, width: 5, length: 5 } },
+      { id: '228801785804', size: '250ml', price: 48.90, originalPrice: 55.70, stock: 37, weight: 400, dimensions: { height: 8, width: 5, length: 5 } },
     ],
   },
   {
@@ -274,8 +241,8 @@ const catalogoBase: ProductBase[] = [
     features: ['Rico em Nitrogênio e Micronutrientes quelatados', 'Alta absorção foliar e radicular', 'Estimula rápida formação de biomassa'],
     images: ['/images/products/bio-green.jpg'],
     variants: [
-      { id: '199186722728', size: '250ml', price: 35.92, originalPrice: 44.90, stock: 105, weight: 400, dimensions: { height: 10, width: 10, length: 15 } },
-      { id: '199186722729', size: '1L', price: 63.92, originalPrice: 79.90, stock: 52, weight: 1400, dimensions: { height: 15, width: 15, length: 20 } },
+      { id: '199186722728', size: '250ml', price: 48.90, originalPrice: 55.70, stock: 105, weight: 400, dimensions: { height: 10, width: 10, length: 15 } },
+      { id: '199186722729', size: '1L', price: 86.50, originalPrice: 98.50, stock: 52, weight: 1400, dimensions: { height: 15, width: 15, length: 20 } },
     ],
   },
   {
@@ -287,8 +254,8 @@ const catalogoBase: ProductBase[] = [
     features: ['Alta concentração de Potássio bioativo', 'Maximiza produção de resinas e frutos', 'Absorção rápida sem queimar as raízes'],
     images: ['/images/products/bio-potassium.jpg'],
     variants: [
-      { id: '219619165964', size: '250ml', price: 27.92, originalPrice: 34.90, stock: 88, weight: 350, dimensions: { height: 10, width: 10, length: 15 } },
-      { id: '219619165965', size: '1L', price: 52.72, originalPrice: 65.90, stock: 44, weight: 1200, dimensions: { height: 15, width: 15, length: 20 } },
+      { id: '219619165964', size: '250ml', price: 37.90, originalPrice: 43.50, stock: 88, weight: 350, dimensions: { height: 10, width: 10, length: 15 } },
+      { id: '219619165965', size: '1L', price: 71.50, originalPrice: 81.50, stock: 44, weight: 1200, dimensions: { height: 15, width: 15, length: 20 } },
     ],
   },
   {
@@ -300,7 +267,7 @@ const catalogoBase: ProductBase[] = [
     features: ['Alimento nobre para micro-organismos', 'Enriquece os açúcares e aroma das plantas', '100% natural e concentrado'],
     images: ['/images/products/melaco-cana.jpg'],
     variants: [
-      { id: '119872865375', size: '1L', price: 35.92, originalPrice: 44.90, stock: 100, weight: 1000, dimensions: { height: 20, width: 20, length: 10 } },
+      { id: '119872865375', size: '1L', price: 48.90, originalPrice: 55.70, stock: 100, weight: 1000, dimensions: { height: 20, width: 20, length: 10 } },
     ],
   },
 ];
