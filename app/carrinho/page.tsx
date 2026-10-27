@@ -220,6 +220,7 @@ export default function CarrinhoPage() {
     try {
       const mpItems = items.map(it => ({
         id: it.productId || it.id,
+        variantId: it.variantId || it.id,
         name: it.nome || (it as any).name,
         price: Number(it.preco || (it as any).price || 0),
         quantity: Number(it.quantity),

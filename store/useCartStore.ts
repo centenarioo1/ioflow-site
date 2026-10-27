@@ -61,7 +61,7 @@ function normalize(input: AddInput): Omit<CartItem, 'quantity'> {
     size: variacao,
     imagem,
     image: imagem,
-    dimensions: input.dimensions, // CORRIGIDO: Preserva as dimensões do produto no carrinho
+    dimensions: input.dimensions, // PRESOCONTROLADO: Preserva dimensões do produto no carrinho
     weight: input.weight,
   };
 }

@@ -59,7 +59,7 @@ const catalogoBase: ProductBase[] = [
   {
     id: '58257070448',
     slug: 'substrato-rico-humus-perlita-fibra-coco-arroz',
-    name: 'Substrato Rico Humus Perlita Fibra de Coco Casca de Arroz',
+    name: 'Substrato Rico Humus Perlita Fibra de Coco Casca de Arroz BIOFLOW',
     category: 'substratos',
     description: 'Substrato balanceado e aerado, rico em húmus com alta retenção de umidade e excelente drenagem para desenvolvimento radicular.',
     features: ['Composição nobre com húmus e perlita', 'Excelente capacidade de drenagem e aeração', 'Pronto para o plantio'],
@@ -87,7 +87,7 @@ const catalogoBase: ProductBase[] = [
   {
     id: '58256436680',
     slug: 'substrato-biomix-turfa-perlita-casca-arroz',
-    name: 'Substrato BioMix: Turfa',
+    name: 'Substrato BioMix: Turfa, Perlita e Casca de Arroz Carbonizada BIOFLOW',
     category: 'substratos',
     description: 'Combinação clássica de turfa, perlita e casca de arroz carbonizada para aeração extrema e excelente controle de pH.',
     features: ['Leveza estrutural superior', 'Perfeita relação ar/água para as raízes', 'Ideal para cultivo indoor e estufas'],
@@ -101,7 +101,7 @@ const catalogoBase: ProductBase[] = [
   {
     id: '58206334194',
     slug: 'substrato-sphagnotec-turfa-perlita-cultivo-indoor',
-    name: 'Substrato Sphagnotec: Turfa e Perlita',
+    name: 'Substrato Sphagnotec: Turfa e Perlita Cultivo Indoor BIOFLOW',
     category: 'substratos',
     description: 'Substrato premium inerte à base de Turfa de Sphagnum e Perlita expandida para máximo controle nutricional.',
     features: ['Substrato inerte de alta pureza', 'Total controle de fertirrigação', 'Volume para grandes cultivos'],
@@ -113,7 +113,7 @@ const catalogoBase: ProductBase[] = [
   {
     id: '23599409706',
     slug: 'substrato-fibra-de-coco-e-perlita',
-    name: 'Fibra de Coco e Perlita',
+    name: 'Fibra de Coco e Perlita Melhor Custo Benefício BIOFLOW',
     category: 'substratos',
     description: 'Mistura semi-inerte balanceada pronta para cultivo hidropônico e fertirrigação contínua.',
     features: ['Fibra de coco tratada e lavada', 'Alta oxigenação radicular', 'Excelente custo-benefício'],
@@ -131,7 +131,7 @@ const catalogoBase: ProductBase[] = [
   {
     id: '58206260102',
     slug: 'perlita-expandida-grossa',
-    name: 'Perlita Expandida Grossa',
+    name: 'Perlita Expandida Grossa Substrato Germinação Grow Indoor BIOFLOW',
     category: 'condicionadores',
     description: 'Mineral vulcânico expandido de alta granulometria, ideal para aeração do solo e germinação de clones e sementes.',
     features: ['Granulometria grossa', '100% estéril e inerte', 'Evita compactação do solo'],
@@ -146,7 +146,7 @@ const catalogoBase: ProductBase[] = [
   {
     id: '58256222893',
     slug: 'fibra-de-coco-triturada',
-    name: 'Fibra de Coco Triturada Orquídeas Rosa do Deserto',
+    name: 'Fibra de Coco Triturada Orquídeas Rosa do Deserto BIOFLOW',
     category: 'condicionadores',
     description: 'Fibra e pó de coco lavados com baixa condutividade elétrica, excelentes para orquídeas, folhagens e condicionamento de solo.',
     features: ['Baixa condutividade elétrica (EC)', 'PH estável entre 5.8 e 6.5', 'Retenção uniforme de umidade'],
@@ -161,7 +161,7 @@ const catalogoBase: ProductBase[] = [
   {
     id: '22199406873',
     slug: 'casca-de-arroz-carbonizada',
-    name: 'Casca de Arroz Carbonizada',
+    name: 'Casca de Arroz Carbonizada Aeração e Drenagem BIOFLOW',
     category: 'condicionadores',
     description: 'Condicionador rico em silício e carbono que melhora a aeração e previne ataques de pragas no sistema radicular.',
     features: ['Rica em silício orgânico', 'Evita proliferação de fungos', 'Melhora retenção de nutrientes'],
@@ -180,7 +180,7 @@ const catalogoBase: ProductBase[] = [
   {
     id: '23899358271',
     slug: 'torta-de-mamona-adubo-organico',
-    name: 'Torta/Farelo de Mamona Adubo Orgânico',
+    name: 'Torta de Mamona Adubo Orgânico BIOFLOW',
     category: 'adubos',
     description: 'Fonte nobre de nitrogênio vegetal e micronutrientes, além de condicionar o solo e repelir pragas de solo.',
     features: ['Alto teor de nitrogênio orgânico', 'Liberação gradual de nutrientes', 'Favorece desenvolvimento vegetativo'],
@@ -195,7 +195,7 @@ const catalogoBase: ProductBase[] = [
   {
     id: '58206771793',
     slug: 'humus-de-minhoca-adubo-organico',
-    name: 'Humus de Minhoca BIOFLOW',
+    name: 'Humus de Minhoca Bio-Humus Adubo Orgânico BIOFLOW',
     category: 'adubos',
     description: 'Adubo natural produzido por minhocas californianas, rico em ácidos húmicos e fúlvicos para recuperação do solo.',
     features: ['Rico em ácidos húmicos e fúlvicos', 'Melhora capacidade de retenção de água', 'Totalmente atóxico'],
@@ -210,7 +210,7 @@ const catalogoBase: ProductBase[] = [
   {
     id: '58256234535',
     slug: 'bio-em1-compostagem-enraizador-microorganismos',
-    name: 'Bio-EM1 Compostagem Enraizador Recuperador de Solo',
+    name: 'Bio-EM1 Compostagem Enraizador Recuperador de Solo BIOFLOW',
     category: 'fertilizantes',
     description: 'Inoculante biológico concentrado com micro-organismos eficientes para acelerar compostagem e enraizamento.',
     features: ['Consórcio de micro-organismos eficientes', 'Acelera decomposição e enraizamento', 'Restaura a saúde de solos cansados'],
@@ -223,7 +223,7 @@ const catalogoBase: ProductBase[] = [
   {
     id: '58206317707',
     slug: 'bio-start-fertilizante-adubo-enraizador',
-    name: 'Bio-Start® Fertilizante enraizador/protetor',
+    name: 'Bio-Start® Fertilizante Adubo Enraizador Clones e Mudas',
     category: 'fertilizantes',
     description: 'Estimulante concentrado com fitormônios e aminoácidos para rápido desenvolvimento de raízes em clones e transplantes.',
     features: ['Explosão de enraizamento', 'Reduz o estresse pós-transplante', 'Ideal para clones e mudas jovens'],
@@ -261,7 +261,7 @@ const catalogoBase: ProductBase[] = [
   {
     id: '58206330358',
     slug: 'melaco-de-cana-adubo-bioestimulante',
-    name: 'Melaço de Cana',
+    name: 'Melaço de Cana Adubo Fertilizante Líquido Bioestimulante BIOFLOW',
     category: 'fertilizantes',
     description: 'Fonte pura de carboidratos solúveis e minerais para alimentar a microbiota benéfica do solo e potenciar a fotossíntese.',
     features: ['Alimento nobre para micro-organismos', 'Enriquece os açúcares e aroma das plantas', '100% natural e concentrado'],

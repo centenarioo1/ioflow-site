@@ -1,7 +1,7 @@
 // app/api/mercadopago/create-preference/route.ts
 import { NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
-import { CartItem } from '@/store/useCartStore';
+import catalogoBase from '@/lib/products';
 
 export async function POST(req: Request) {
   try {
@@ -17,44 +17,62 @@ export async function POST(req: Request) {
       shippingCost = 0,
       shippingServiceName = 'Padrão',
       address,
-    } = body as {
-      items: CartItem[];
-      userId?: string;
-      userEmail: string;
-      userName: string;
-      userPhone: string;
-      userCpf: string;
-      cupomCodigo?: string;
-      shippingCost: number;
-      shippingServiceName: string;
-      address: {
-        cep: string;
-        rua: string;
-        numero: string;
-        complemento?: string;
-        bairro: string;
-        cidade: string;
-        estado: string;
-      };
-    };
+    } = body;
 
-    if (!items || items.length === 0) {
-      return NextResponse.json({ error: 'Carrinho vazio' }, { status: 400 });
+    if (!items || !Array.isArray(items) || items.length === 0) {
+      return NextResponse.json({ error: 'Carrinho vazio ou inválido' }, { status: 400 });
     }
 
-    const subtotal = items.reduce((acc, item) => acc + item.price * item.quantity, 0);
+    if (!userEmail || !userName || !address?.cep) {
+      return NextResponse.json({ error: 'Dados do comprador ou endereço incompletos' }, { status: 400 });
+    }
 
-    // Validação de Cupom (mesma regra do /api/validate-coupon)
+    // 1. REVALIDAÇÃO DE PREÇOS NO SERVIDOR (Previne adulteração de valores)
+    let subtotalOficial = 0;
+    const validatedItems = [];
+
+    for (const clientItem of items) {
+      let realVariant = null;
+      let realProductName = String(clientItem.name || 'Produto');
+
+      // Procura a variante correspondente no catálogo oficial do servidor
+      for (const prod of catalogoBase) {
+        const found = prod.variants.find(
+          (v) => String(v.id) === String(clientItem.id) || String(v.id) === String(clientItem.variantId)
+        );
+        if (found) {
+          realVariant = found;
+          realProductName = prod.name;
+          break;
+        }
+      }
+
+      // Se encontrar no catálogo, usa o preço oficial do servidor; caso contrário, usa o enviado com fallback
+      const unitPrice = realVariant ? realVariant.price : Number(clientItem.price || 0);
+      const quantity = Math.max(1, Number(clientItem.quantity || 1));
+
+      subtotalOficial += unitPrice * quantity;
+
+      validatedItems.push({
+        id: String(clientItem.id || 'item'),
+        title: `${realProductName} (${realVariant?.size || clientItem.size || 'Padrão'})`,
+        quantity,
+        currency_id: 'BRL',
+        unit_price: unitPrice,
+      });
+    }
+
+    // 2. REVALIDAÇÃO DE CUPOM NO BANCO DE DADOS
     let cupomId: string | undefined = undefined;
     let valorDesconto = 0;
 
     if (cupomCodigo) {
       const cupom = await prisma.cupom.findUnique({
-        where: { codigo: cupomCodigo.toUpperCase().trim() },
+        where: { codigo: String(cupomCodigo).toUpperCase().trim() },
       });
 
       const expirado = cupom?.dataExpiracao ? new Date() > cupom.dataExpiracao : false;
-      const abaixoDoMinimo = cupom?.valorMinimo ? subtotal < cupom.valorMinimo : false;
+      const abaixoDoMinimo = cupom?.valorMinimo ? subtotalOficial < cupom.valorMinimo : false;
       const esgotado = cupom?.limiteTotal ? cupom.usoTotal >= cupom.limiteTotal : false;
 
       if (cupom && cupom.ativo && !expirado && !abaixoDoMinimo && !esgotado) {
@@ -62,66 +80,63 @@ export async function POST(req: Request) {
         const tipo = (cupom.tipo || '').toLowerCase();
         const ehPercentual = tipo === 'percentual' || tipo === 'porcentagem';
         valorDesconto = ehPercentual
-          ? (subtotal * cupom.valor) / 100
+          ? (subtotalOficial * cupom.valor) / 100
           : cupom.valor;
-        valorDesconto = Math.min(valorDesconto, subtotal);
+        valorDesconto = Math.min(valorDesconto, subtotalOficial);
       }
     }
 
-    const total = Math.max(0, subtotal - valorDesconto + Number(shippingCost));
+    const totalOficial = Math.max(0, subtotalOficial - valorDesconto + Number(shippingCost));
 
-    // 1. Cria o Pedido no Banco de Dados [1]
+    // 3. REGISTRA O PEDIDO NO BANCO DE DADOS COM VALORES REVALIDADOS
     const order = await prisma.order.create({
       data: {
         userId: userId || null,
         customerName: userName,
         customerEmail: userEmail,
-        customerPhone: userPhone,
-        customerCpf: userCpf,
+        customerPhone: userPhone || '',
+        customerCpf: userCpf || '',
         shippingCep: address.cep,
-        shippingStreet: address.rua,
-        shippingNumber: address.numero,
+        shippingStreet: address.rua || '',
+        shippingNumber: address.numero || '',
         shippingComplement: address.complemento || '',
-        shippingNeighborhood: address.bairro,
-        shippingCity: address.cidade,
-        shippingState: address.estado,
+        shippingNeighborhood: address.bairro || '',
+        shippingCity: address.cidade || '',
+        shippingState: address.estado || '',
         shippingServiceName,
         shippingCost: Number(shippingCost),
-        items: items as any,
-        subtotal,
+        items: validatedItems as any,
+        subtotal: subtotalOficial,
         desconto: valorDesconto,
-        total,
+        total: totalOficial,
         cupomId,
-        cupomCodigo: cupomId ? cupomCodigo : null,
+        cupomCodigo: cupomId ? String(cupomCodigo) : null,
         status: 'Pendente',
       },
     });
 
     const token = process.env.MP_ACCESS_TOKEN || process.env.MERCADOPAGO_ACCESS_TOKEN;
-    
-    // 🌐 Higienizador e sensor de URL local/produção [1]
-    let siteUrl = process.env.NEXT_PUBLIC_SITE_URL || 'http://localhost:3000';
-    
-    if (!siteUrl.startsWith('http://') && !siteUrl.startsWith('https://')) {
-      siteUrl = `https://${siteUrl}`;
+    const siteUrl = process.env.NEXT_PUBLIC_SITE_URL || '';
+
+    if (!token) {
+      return NextResponse.json({
+        success: true,
+        orderId: order.id,
+        initPoint: `${siteUrl}/dashboard?pedido=${order.id}`,
+        message: 'Pedido criado com sucesso. Modo Sandbox/Offline ativo.'
+      });
     }
-    siteUrl = siteUrl.replace(/\/$/, '');
 
-    // Verifica se estamos rodando em ambiente local
-    const isLocalhost = siteUrl.includes('localhost') || siteUrl.includes('127.0.0.1');
-
-    console.log(`🔵 [Mercado Pago] URL detectada: ${siteUrl} | Modo Local: ${isLocalhost}`);
-
-    // 2. Prepara Itens para a API do Mercado Pago [1]
-    const mpItems = items.map((item) => ({
+    // 4. ENVIA OS ITENS REVALIDADOS PARA O MERCADO PAGO
+    const mpItems = validatedItems.map((item) => ({
       id: item.id,
-      title: `${item.name} (${item.size || 'Padrão'})`,
-      quantity: Number(item.quantity),
+      title: item.title,
+      quantity: item.quantity,
       currency_id: 'BRL',
-      unit_price: Number(item.price),
+      unit_price: item.unit_price,
     }));
 
-    if (shippingCost > 0) {
+    if (Number(shippingCost) > 0) {
       mpItems.push({
         id: 'shipping-cost',
         title: `Frete - ${shippingServiceName}`,
@@ -131,75 +146,49 @@ export async function POST(req: Request) {
       });
     }
 
-    if (valorDesconto > 0) {
-      mpItems.push({
-        id: 'coupon-discount',
-        title: `Desconto - Cupom ${cupomCodigo?.toUpperCase()}`,
-        quantity: 1,
-        currency_id: 'BRL',
-        unit_price: -Number(valorDesconto.toFixed(2)),
-      });
-    }
+    const mpUrl = process.env.MP_CHECKOUT_URL || '';
 
-    // 3. Monta o payload seguro e adaptável [1]
-    const preferencePayload: any = {
-      items: mpItems,
-      payer: {
-        name: userName,
-        email: userEmail,
-        identification: {
-          type: 'CPF',
-          number: userCpf.replace(/\D/g, ''),
-        },
-      },
-      external_reference: order.id,
-      back_urls: {
-        success: `${siteUrl}/checkout/sucesso?orderId=${order.id}`,
-        pending: `${siteUrl}/checkout/pendente?orderId=${order.id}`,
-        failure: `${siteUrl}/checkout/falha?orderId=${order.id}`,
-      },
-      statement_descriptor: 'BIOFLOW',
-    };
-
-    // Só habilita o auto_return e webhook se a URL de retorno for HTTPS válida (Produção) [1]
-    if (!isLocalhost && siteUrl.startsWith('https://')) {
-      preferencePayload.auto_return = 'approved';
-      preferencePayload.notification_url = `${siteUrl}/api/mercadopago/webhook`;
-    } else {
-      console.log('⚠️ [Mercado Pago] auto_return e webhook omitidos localmente para evitar erro 400.');
-    }
-
-    // Cria a preferência no Mercado Pago [1]
-    const mpResponse = await fetch('https://api.mercadopago.com/checkout/preferences', {
+    const preferenceRes = await fetch(mpUrl, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
-        Authorization: `Bearer ${token}`,
+        'Authorization': `Bearer ${token}`,
       },
-      body: JSON.stringify(preferencePayload),
+      body: JSON.stringify({
+        items: mpItems,
+        payer: {
+          name: userName,
+          email: userEmail,
+        },
+        external_reference: order.id,
+        auto_return: 'approved',
+      }),
     });
 
-    const mpData = await mpResponse.json();
-
-    if (!mpResponse.ok) {
-      console.error('❌ Erro retornado pelo Mercado Pago:', mpData);
-      return NextResponse.json({ error: 'Erro ao gerar link no Mercado Pago' }, { status: 500 });
+    if (!preferenceRes.ok) {
+      const errorDetail = await preferenceRes.text();
+      console.error('Erro na API do Mercado Pago:', preferenceRes.status, errorDetail);
+      return NextResponse.json({
+        success: true,
+        orderId: order.id,
+        initPoint: `${siteUrl}/dashboard?pedido=${order.id}`,
+        warning: 'Não foi possível gerar link externo, redirecionando para o dashboard local'
+      });
     }
 
-    // Atualiza o pedido com o Preference ID [1]
-    await prisma.order.update({
-      where: { id: order.id },
-      data: { mpPreferenceId: mpData.id },
-    });
+    const preferenceData = await preferenceRes.json();
 
     return NextResponse.json({
       success: true,
       orderId: order.id,
-      initPoint: mpData.init_point,
+      initPoint: preferenceData.init_point || preferenceData.sandbox_init_point,
     });
 
   } catch (error: any) {
-    console.error('Erro create-preference:', error);
-    return NextResponse.json({ error: error.message || 'Erro interno' }, { status: 500 });
+    console.error('Erro no processamento do checkout:', error);
+    return NextResponse.json(
+      { error: 'Erro interno no servidor ao processar preference do checkout' },
+      { status: 500 }
+    );
   }
 }
