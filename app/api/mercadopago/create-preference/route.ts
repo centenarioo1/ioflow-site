@@ -33,15 +33,19 @@ export async function POST(req: Request) {
     }
 
     const catalogList = (products || produtos || []) as any[];
+    const siteUrl = (process.env.NEXT_PUBLIC_SITE_URL || 'https://bioflow-site-bioflow1.vercel.app').replace(/\/$/, '');
 
-    // 1. REVALIDAÇÃO DE PREÇOS NO SERVIDOR (PREVINE ADULTERAÇÃO DE VALORES)
+    // 1. REVALIDAÇÃO DE PREÇOS, IMAGENS E DETALHES DOS PRODUTOS
     let subtotalOficial = 0;
     const validatedItems = [];
 
     for (const clientItem of items) {
       let realVariant = null;
-      let realProductName = String(clientItem.name || clientItem.nome || 'Produto');
+      let realProductName = String(clientItem.name || clientItem.nome || 'Produto BIOFLOW');
+      let realImage = clientItem.image || clientItem.imagem || '';
+      let realDescription = clientItem.description || clientItem.descricao || '';
 
+      // Busca produto e variante no catálogo oficial do servidor
       for (const prod of catalogList) {
         if (prod?.variants && Array.isArray(prod.variants)) {
           const found = prod.variants.find(
@@ -50,11 +54,17 @@ export async function POST(req: Request) {
           if (found) {
             realVariant = found;
             realProductName = prod.name || prod.nome || realProductName;
+            realDescription = prod.descricaoCurta || prod.description || prod.subtitulo || realDescription;
+            const prodImg = prod.images?.[0] || prod.imagens?.[0];
+            if (prodImg) {
+              realImage = prodImg;
+            }
             break;
           }
         }
       }
 
+      // Cálculo e segurança de preço
       let rawPrice = realVariant ? Number(realVariant.price) : Number(clientItem.price ?? clientItem.preco ?? clientItem.unit_price ?? 0);
       if (isNaN(rawPrice) || rawPrice <= 0) { rawPrice = Number(clientItem.precoPromocional ?? 0); }
       const unitPrice = Math.max(0.01, rawPrice);
@@ -62,16 +72,34 @@ export async function POST(req: Request) {
 
       subtotalOficial += unitPrice * quantity;
 
+      // Trata a URL da imagem para garantir formato público e absoluto (http/https) exigido pelo Mercado Pago
+      let pictureUrl = '';
+      if (realImage) {
+        if (realImage.startsWith('http://') || realImage.startsWith('https://')) {
+          pictureUrl = realImage;
+        } else {
+          pictureUrl = `${siteUrl}${realImage.startsWith('/') ? '' : '/'}${realImage}`;
+        }
+      }
+
+      const tamanho = realVariant?.size || clientItem.size || clientItem.variacao || 'Padrão';
+      const tituloCompleto = `${realProductName} - ${tamanho}`;
+      const descricaoCurta = realDescription 
+        ? `${realDescription.substring(0, 100)}...` 
+        : `Produto BIOFLOW Cultivo Orgânico - Embalagem ${tamanho}`;
+
       validatedItems.push({
         id: String(clientItem.id || 'item'),
-        title: `${realProductName} (${realVariant?.size || clientItem.size || clientItem.variacao || 'Padrão'})`,
+        title: tituloCompleto,
+        description: descricaoCurta,
         quantity,
         currency_id: 'BRL',
         unit_price: unitPrice,
+        picture_url: pictureUrl,
       });
     }
 
-    // 2. REVALIDAÇÃO DE CUPOM NO BANCO DE DADOS (COM FALLBACK SEGURO)
+    // 2. REVALIDAÇÃO DE CUPOM NO BANCO DE DADOS
     let cupomId: string | undefined = undefined;
     let valorDesconto = 0;
 
@@ -101,7 +129,7 @@ export async function POST(req: Request) {
 
     const totalOficial = Math.max(0, subtotalOficial - valorDesconto + Number(shippingCost));
 
-    // 3. VALIDAÇÃO DE USER_ID PARA EVITAR ERROS DE CHAVE ESTRANGEIRA (P2003)
+    // 3. VALIDAÇÃO DE USER_ID
     let validUserId: string | null = null;
     if (userId) {
       try {
@@ -116,7 +144,7 @@ export async function POST(req: Request) {
       }
     }
 
-    // 4. CRIAÇÃO DO PEDIDO NO BANCO DE DADOS (COM FALLBACK DE SEGURANÇA)
+    // 4. CRIAÇÃO DO PEDIDO NO BANCO DE DADOS
     let orderId = `ORD-${Date.now()}`;
     try {
       const order = await prisma.order.create({
@@ -150,7 +178,6 @@ export async function POST(req: Request) {
     }
 
     const token = process.env.MP_ACCESS_TOKEN || process.env.MERCADOPAGO_ACCESS_TOKEN;
-    const siteUrl = process.env.NEXT_PUBLIC_SITE_URL || 'https://bioflow-site-bioflow1.vercel.app';
 
     if (!token) {
       return NextResponse.json({
@@ -161,18 +188,27 @@ export async function POST(req: Request) {
       });
     }
 
-    // 5. ENVIO DOS ITENS PARA A API DO MERCADO PAGO
-    const mpItems = validatedItems.map((item) => ({
-      id: item.id,
-      title: item.title,
-      quantity: item.quantity,
-      currency_id: 'BRL',
-      unit_price: item.unit_price,
-    }));
+    // 5. ENVIO DOS ITENS DETALHADOS (COM MINIATURAS E DESCRIÇÃO) PARA O MERCADO PAGO
+    const mpItems = validatedItems.map((item) => {
+      const mpItem: any = {
+        id: item.id,
+        title: item.title,
+        description: item.description,
+        quantity: item.quantity,
+        currency_id: 'BRL',
+        unit_price: item.unit_price,
+      };
+      if (item.picture_url) {
+        mpItem.picture_url = item.picture_url;
+      }
+      return mpItem;
+    });
+
     if (Number(shippingCost) > 0) {
       mpItems.push({
         id: 'shipping-cost',
         title: `Frete - ${shippingServiceName}`,
+        description: `Envio para o CEP ${address.cep}`,
         quantity: 1,
         currency_id: 'BRL',
         unit_price: Number(shippingCost),
@@ -192,8 +228,13 @@ export async function POST(req: Request) {
         payer: {
           name: userName,
           email: userEmail,
+          identification: userCpf ? {
+            type: 'CPF',
+            number: String(userCpf).replace(/\D/g, '')
+          } : undefined,
         },
         external_reference: orderId,
+        statement_descriptor: 'BIOFLOW',
         auto_return: 'approved',
         back_urls: {
           success: `${siteUrl}/dashboard?status=approved`,
