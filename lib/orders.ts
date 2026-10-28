@@ -1,3 +1,4 @@
+// lib/orders.ts
 import { prisma } from '@/lib/prisma';
 
 // Tipagens locais flexíveis para ignorar a checagem estrita de exportação do Prisma Client no Vercel
@@ -37,12 +38,17 @@ export function mapOrderItems(items: unknown): OrderItemView[] {
   if (!Array.isArray(items)) return [];
   return items.map((raw) => {
     const it = raw as Record<string, unknown>;
+    
+    // Suporta todos os nomes e chaves possíveis salvos no banco (Mercado Pago, Legado ou Novo)
+    const rawName = it.nome ?? it.name ?? it.title ?? 'Produto BIOFLOW';
+    const rawPrice = it.preco ?? it.price ?? it.unit_price ?? 0;
     const variacao = it.variacao ?? it.size;
+
     return {
-      produtoId: String(it.produtoId ?? it.productId ?? it.id ?? ''),
-      nome: String(it.nome ?? it.name ?? 'Produto'),
+      produtoId: String(it.produtoId ?? it.productId ?? it.id ?? 'item'),
+      nome: String(rawName),
       variacao: variacao ? String(variacao) : undefined,
-      preco: Number(it.preco ?? it.price ?? 0),
+      preco: Number(rawPrice),
       quantity: Number(it.quantity ?? 1),
     };
   });
@@ -56,7 +62,7 @@ export function serializeOrder(
     ...order,
     orderNumber: `BF-${String(order.id || '').slice(-8).toUpperCase()}`,
     items: mapOrderItems(order.items),
-    frete: o.shippingCost ?? o.frete ?? 0,
+    frete: Number(o.shippingCost ?? o.frete ?? 0),
     cupom: o.cupomCodigo || o.cupom || undefined,
     cliente: {
       nome: order.user?.nome || o.customerName || o.nomeCliente || 'Cliente',
