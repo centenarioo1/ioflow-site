@@ -406,20 +406,27 @@ function DashboardContent() {
                           </div>
 
                           <div style={{ background: '#f9fafb', padding: '10px 14px', borderRadius: 10, marginBottom: 12 }}>
-                            {order.items.map((it, idx) => (
-                              <div key={idx} style={{ display: 'flex', justifyContent: 'space-between', fontSize: 12, color: '#374151', padding: '2px 0' }}>
-                                <span>{it.quantity}x {it.nome} {it.variacao ? `(${it.variacao})` : ''}</span>
-                                <span style={{ fontWeight: 700 }}>{fmt(it.preco * it.quantity)}</span>
-                              </div>
-                            ))}
+                            {order.items.map((it: any, idx: number) => {
+                              const nomeProd = it.nome || it.name || it.title || 'Produto';
+                              const varProd = it.variacao || it.size || '';
+                              const precoVal = Number(it.preco ?? it.price ?? it.unit_price ?? 0);
+                              return (
+                                <div key={idx} style={{ display: 'flex', justifyContent: 'space-between', fontSize: 12, color: '#374151', padding: '2px 0' }}>
+                                  <span>{it.quantity || 1}x {nomeProd} {varProd ? `(${varProd})` : ''}</span>
+                                  <span style={{ fontWeight: 700 }}>{fmt(precoVal * (it.quantity || 1))}</span>
+                                </div>
+                              );
+                            })}
                           </div>
 
                           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', fontSize: 12, color: '#4b5563', flexWrap: 'wrap', gap: 10 }}>
                             <div>
                               <span>Total: <strong style={{ color: '#15803d', fontSize: 13.5 }}>{fmt(order.total)}</strong></span>
                             </div>
-                            {order.trackingCode && (
+                            {order.trackingCode ? (
                               <span style={{ color: '#1e40af', fontWeight: 700 }}>📦 Rastreio: {order.trackingCode}</span>
+                            ) : (
+                              <span style={{ color: '#6b7280', fontSize: 11.5, fontWeight: 600 }}>🚚 Status do Envio: Aguardando código de rastreio</span>
                             )}
                           </div>
 
