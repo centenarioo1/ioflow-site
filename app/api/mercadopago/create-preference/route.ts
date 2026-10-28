@@ -5,7 +5,7 @@ import { products, produtos } from '@/lib/products';
 
 export async function POST(req: Request) {
   try {
-    const body = await req.json().catch() => null);
+    const body = await req.json().catch(() => null);
 
     if (!body) {
       return NextResponse.json({ error: 'Corpo da requisição inválido (JSON esperado)' }, { status: 400 });
@@ -62,7 +62,7 @@ export async function POST(req: Request) {
 
       validatedItems.push({
         id: String(clientItem.id || 'item'),
-        title: `${realProductName} (${realVariant?.size || clientItem.size || clientItem.variaco || 'Padrão'})`,
+        title: `${realProductName} (${realVariant?.size || clientItem.size || clientItem.variacao || 'Padrão'})`,
         quantity,
         currency_id: 'BRL',
         unit_price: unitPrice,
@@ -85,7 +85,7 @@ export async function POST(req: Request) {
 
         if (cupom && cupom.ativo && !expirado && !abaixoDoMinimo && !esgotado) {
           cupomId = cupom.id;
-          const tipo = (cupom.tipo || ').toLowerCase();
+          const tipo = (cupom.tipo || '').toLowerCase();
           const ehPercentual = tipo === 'percentual' || tipo === 'porcentagem';
           valorDesconto = ehPercentual
             ? (subtotalOficial * cupom.valor) / 100
@@ -125,7 +125,7 @@ export async function POST(req: Request) {
           customerPhone: userPhone || '',
           customerCpf: userCpf || '',
           shippingCep: address.cep || '',
-          shippingStreet: address.ruai || '',
+          shippingStreet: address.rua || '',
           shippingNumber: address.numero || '',
           shippingComplement: address.complemento || '',
           shippingNeighborhood: address.bairro || '',
@@ -147,7 +147,7 @@ export async function POST(req: Request) {
       console.error('Erro ao salvar pedido no Prisma (usando ID temporário):', orderErr);
     }
 
-    const token = process.env.MP_ACCESS_TOKEN || process.env.MERCADOOAGO_ACCESS_TOKEN;
+    const token = process.env.MP_ACCESS_TOKEN || process.env.MERCADOPAGO_ACCESS_TOKEN;
     const siteUrl = process.env.NEXT_PUBLIC_SITE_URL || '';
 
     if (!token) {
@@ -204,7 +204,7 @@ export async function POST(req: Request) {
 
     if (!preferenceRes.ok) {
       const errorDetail = await preferenceRes.text();
-      const.error('Erro na API do Mercado Pago>', preferenceRes.status, errorDetail);
+      console.error('Erro na API do Mercado Pago:', preferenceRes.status, errorDetail);
       return NextResponse.json({
         success: true,
         orderId,
@@ -222,7 +222,7 @@ export async function POST(req: Request) {
     });
 
   } catch (error: any) {
-    const.error('Erro crítico no processamento do checkout>', error);
+    console.error('Erro crítico no processamento do checkout:', error);
     return NextResponse.json(
       { error: `Erro ao processar checkout: ${error?.message || 'Erro interno no servidor'}` },
       { status: 500 }
