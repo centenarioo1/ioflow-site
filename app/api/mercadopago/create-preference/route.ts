@@ -1,10 +1,16 @@
+// app/api/mercadopago/create-preference/route.ts
 import { NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import { products, produtos } from '@/lib/products';
 
 export async function POST(req: Request) {
   try {
-    const body = await req.json();
+    const body = await req.json().catch(() => null);
+
+    if (!body) {
+      return NextResponse.json({ error: 'Corpo da requisição inválido (JSON esperado)' }, { status: 400 });
+    }
+
     const {
       items,
       userId,
@@ -19,16 +25,16 @@ export async function POST(req: Request) {
     } = body;
 
     if (!items || !Array.isArray(items) || items.length === 0) {
-      return NextResponse.json({ error: 'Carrinho vazio ou inválido' }, { status: 400 });
+      return NextResponse.json({ error: 'Carrinho vazio ou formato inválido' }, { status: 400 });
     }
 
     if (!userEmail || !userName || !address?.cep) {
-      return NextResponse.json({ error: 'Dados do comprador ou endereço incompletos' }, { status: 400 });
+      return NextResponse.json({ error: 'Dados do comprador (e-mail, nome) ou CEP do endereço são obrigatórios' }, { status: 400 });
     }
 
     const catalogList = (products || produtos || []) as any[];
 
-    // 1. REVALIDAÇÃO DE PREÇOS NO SERVIDOR (Previne adulteração de valores)
+    // 1. REVALIDAÇÃO DE PREÇOS NO SERVIDOR (PREVINE ADULTERAÇÃO DE VALORES)
     let subtotalOficial = 0;
     const validatedItems = [];
 
@@ -36,9 +42,8 @@ export async function POST(req: Request) {
       let realVariant = null;
       let realProductName = String(clientItem.name || clientItem.nome || 'Produto');
 
-      // Procura a variante correspondente no catálogo oficial do servidor
       for (const prod of catalogList) {
-        if (prod.variants && Array.isArray(prod.variants)) {
+        if (prod?.variants && Array.isArray(prod.variants)) {
           const found = prod.variants.find(
             (v: any) => String(v.id) === String(clientItem.id) || String(v.id) === String(clientItem.variantId)
           );
@@ -50,8 +55,9 @@ export async function POST(req: Request) {
         }
       }
 
-      // Se encontrar no catálogo, usa o preço oficial do servidor; caso contrário, usa o enviado com fallback
-      const unitPrice = realVariant ? Number(realVariant.price) : Number(clientItem.price || clientItem.preco || 0);
+      let rawPrice = realVariant ? Number(realVariant.price) : Number(clientItem.price ?? clientItem.preco ?? clientItem.unit_price ?? 0);
+      if (isNaN(rawPrice) || rawPrice <= 0) { rawPrice = Number(clientItem.precoPromocional ?? 0); }
+      const unitPrice = Math.max(0.01, rawPrice);
       const quantity = Math.max(1, Number(clientItem.quantity || 1));
 
       subtotalOficial += unitPrice * quantity;
@@ -65,7 +71,7 @@ export async function POST(req: Request) {
       });
     }
 
-    // 2. REVALIDAÇÃO DE CUPOM NO BANCO DE DADOS
+    // 2. REVALIDAÇÃO DE CUPOM NO BANCO DE DADOS (COM FALLBACK SEGURO)
     let cupomId: string | undefined = undefined;
     let valorDesconto = 0;
 
@@ -75,44 +81,42 @@ export async function POST(req: Request) {
           where: { codigo: String(cupomCodigo).toUpperCase().trim() },
         });
 
-        if (cupom && cupom.ativo) {
-          const expirado = cupom.dataExpiracao ? new Date() > cupom.dataExpiracao : false;
-          const abaixoDoMinimo = cupom.valorMinimo ? subtotalOficial < cupom.valorMinimo : false;
-          const esgotado = cupom.limiteTotal ? cupom.usoTotal >= cupom.limiteTotal : false;
+        const expirado = cupom?.dataExpiracao ? new Date() > cupom.dataExpiracao : false;
+        const abaixoDoMinimo = cupom?.valorMinimo ? subtotalOficial < cupom.valorMinimo : false;
+        const esgotado = cupom?.limiteTotal ? cupom.usoTotal >= cupom.limiteTotal : false;
 
-          if (!expirado && !abaixoDoMinimo && !esgotado) {
-            cupomId = cupom.id;
-            const tipoStr = String(cupom.tipo || '').toLowerCase();
-            const ehPercentual = tipoStr === 'percentual' || tipoStr === 'porcentagem';
-            valorDesconto = ehPercentual
-              ? (subtotalOficial * Number(cupom.valor)) / 100
-              : Number(cupom.valor);
-            valorDesconto = Math.min(valorDesconto, subtotalOficial);
-          }
+        if (cupom && cupom.ativo && !expirado && !abaixoDoMinimo && !esgotado) {
+          cupomId = cupom.id;
+          const tipo = (cupom.tipo || '').toLowerCase();
+          const ehPercentual = tipo === 'percentual' || tipo === 'porcentagem';
+          valorDesconto = ehPercentual
+            ? (subtotalOficial * cupom.valor) / 100
+            : cupom.valor;
+          valorDesconto = Math.min(valorDesconto, subtotalOficial);
         }
       } catch (cupomErr) {
-        console.warn('Aviso: Não foi possível revalidar cupom no banco:', cupomErr);
+        console.warn('Aviso: Falha ao validar cupom no banco, prosseguindo sem cupom:', cupomErr);
       }
     }
 
     const totalOficial = Math.max(0, subtotalOficial - valorDesconto + Number(shippingCost));
 
-    // 3. REGISTRA O PEDIDO NO BANCO DE DADOS (Verifica se userId existe para evitar FK Error P2003)
+    // 3. VALIDAÇÃO DE USER_ID PARA EVITAR ERROS DE CHAVE ESTRANGEIRA (P2003)
     let validUserId: string | null = null;
     if (userId) {
       try {
         const userExists = await prisma.user.findUnique({
           where: { id: String(userId) },
-          select: { id: true },
         });
         if (userExists) {
           validUserId = userExists.id;
         }
-      } catch (userCheckErr) {
-        console.warn('Aviso ao verificar usuário:', userCheckErr);
+      } catch (uErr) {
+        console.warn('Aviso: Não foi possível verificar o userId no banco:', uErr);
       }
     }
 
+    // 4. CRIAÇÃO DO PEDIDO NO BANCO DE DADOS (COM FALLBACK DE SEGURANÇA)
     let orderId = `ORD-${Date.now()}`;
     try {
       const order = await prisma.order.create({
@@ -122,42 +126,42 @@ export async function POST(req: Request) {
           customerEmail: userEmail,
           customerPhone: userPhone || '',
           customerCpf: userCpf || '',
-          shippingCep: address.cep,
+          shippingCep: address.cep || '',
           shippingStreet: address.rua || '',
           shippingNumber: address.numero || '',
           shippingComplement: address.complemento || '',
           shippingNeighborhood: address.bairro || '',
           shippingCity: address.cidade || '',
           shippingState: address.estado || '',
-          shippingServiceName,
+          shippingServiceName: shippingServiceName || 'Padrão',
           shippingCost: Number(shippingCost),
           items: validatedItems as any,
           subtotal: subtotalOficial,
           desconto: valorDesconto,
           total: totalOficial,
-          cupomId: cupomId || null,
+          cupomId,
           cupomCodigo: cupomId ? String(cupomCodigo) : null,
           status: 'Pendente',
         },
       });
       orderId = order.id;
-    } catch (dbErr) {
-      console.error('Aviso ao salvar pedido no banco (seguindo com o checkout):', dbErr);
+    } catch (orderErr) {
+      console.error('Erro ao salvar pedido no Prisma (usando ID temporário):', orderErr);
     }
 
     const token = process.env.MP_ACCESS_TOKEN || process.env.MERCADOPAGO_ACCESS_TOKEN;
-    const siteUrl = process.env.NEXT_PUBLIC_SITE_URL || '';
+    const siteUrl = process.env.NEXT_PUBLIC_SITE_URL || 'https://bioflow-site-bioflow1.vercel.app';
 
     if (!token) {
       return NextResponse.json({
         success: true,
         orderId,
         initPoint: `${siteUrl}/dashboard?pedido=${orderId}`,
-        message: 'Pedido criado localmente. Adicione MP_ACCESS_TOKEN nas variáveis de ambiente para o Mercado Pago.'
+        message: 'Pedido registrado localmente (MP_ACCESS_TOKEN ausente nas variáveis de ambiente).'
       });
     }
 
-    // 4. PREPARA ITENS E DISPARA PREFERÊNCIA DO MERCADO PAGO
+    // 5. ENVIO DOS ITENS PARA A API DO MERCADO PAGO
     const mpItems = validatedItems.map((item) => ({
       id: item.id,
       title: item.title,
@@ -165,7 +169,6 @@ export async function POST(req: Request) {
       currency_id: 'BRL',
       unit_price: item.unit_price,
     }));
-
     if (Number(shippingCost) > 0) {
       mpItems.push({
         id: 'shipping-cost',
@@ -176,9 +179,9 @@ export async function POST(req: Request) {
       });
     }
 
-    const mpEndpoint = process.env.MP_CHECKOUT_URL || 'https://api.mercadopago.com/checkout/preferences';
+    const mpUrl = process.env.MP_CHECKOUT_URL || 'https://api.mercadopago.com/checkout/preferences';
 
-    const preferenceRes = await fetch(mpEndpoint, {
+    const preferenceRes = await fetch(mpUrl, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
@@ -192,6 +195,11 @@ export async function POST(req: Request) {
         },
         external_reference: orderId,
         auto_return: 'approved',
+        back_urls: {
+          success: `${siteUrl}/dashboard?status=approved`,
+          pending: `${siteUrl}/dashboard?status=pending`,
+          failure: `${siteUrl}/carrinho?status=failure`,
+        },
       }),
     });
 
@@ -202,7 +210,7 @@ export async function POST(req: Request) {
         success: true,
         orderId,
         initPoint: `${siteUrl}/dashboard?pedido=${orderId}`,
-        warning: 'Falha na resposta do Mercado Pago. Redirecionando para o dashboard local.'
+        warning: 'Não foi possível gerar link externo do Mercado Pago, direcionando ao dashboard.'
       });
     }
 
@@ -215,9 +223,9 @@ export async function POST(req: Request) {
     });
 
   } catch (error: any) {
-    console.error('Erro no processamento do checkout:', error);
+    console.error('Erro crítico no processamento do checkout:', error);
     return NextResponse.json(
-      { error: 'Erro interno no servidor ao processar preference do checkout' },
+      { error: `Erro ao processar checkout: ${error?.message || 'Erro interno no servidor'}` },
       { status: 500 }
     );
   }
