@@ -42,7 +42,7 @@ export async function POST(req: Request) {
     for (const clientItem of items) {
       let realVariant = null;
       let realProductName = String(clientItem.name || clientItem.nome || 'Produto BIOFLOW');
-      let realImage = clientItem.image || clientItem.imagem || '';
+      let realImage = clientItem.image || clientItem.imagem || clientItem.picture_url || '';
       let realDescription = clientItem.description || clientItem.descricao || '';
 
       // Busca produto e variante no catálogo oficial do servidor
@@ -85,16 +85,24 @@ export async function POST(req: Request) {
       const tamanho = realVariant?.size || clientItem.size || clientItem.variacao || 'Padrão';
       const tituloCompleto = `${realProductName} - ${tamanho}`;
       const descricaoCurta = realDescription 
-        ? `${realDescription.substring(0, 100)}...` 
+        ? `${realDescription.substring(0, 100)}` 
         : `Produto BIOFLOW Cultivo Orgânico - Embalagem ${tamanho}`;
 
+      // Salva com TODAS as chaves cruzadas para compatibilidade universal no banco e dashboard
       validatedItems.push({
         id: String(clientItem.id || 'item'),
+        productId: String(clientItem.productId || clientItem.id || 'item'),
+        nome: realProductName,
+        name: realProductName,
         title: tituloCompleto,
+        variacao: tamanho,
+        size: tamanho,
+        preco: unitPrice,
+        price: unitPrice,
+        unit_price: unitPrice,
         description: descricaoCurta,
         quantity,
         currency_id: 'BRL',
-        unit_price: unitPrice,
         picture_url: pictureUrl,
       });
     }
@@ -188,6 +196,8 @@ export async function POST(req: Request) {
       });
     }
 
+    const isTestToken = token.startsWith('TEST-');
+
     // 5. ENVIO DOS ITENS DETALHADOS (COM MINIATURAS E DESCRIÇÃO) PARA O MERCADO PAGO
     const mpItems = validatedItems.map((item) => {
       const mpItem: any = {
@@ -197,6 +207,7 @@ export async function POST(req: Request) {
         quantity: item.quantity,
         currency_id: 'BRL',
         unit_price: item.unit_price,
+        category_id: 'others',
       };
       if (item.picture_url) {
         mpItem.picture_url = item.picture_url;
@@ -212,6 +223,7 @@ export async function POST(req: Request) {
         quantity: 1,
         currency_id: 'BRL',
         unit_price: Number(shippingCost),
+        category_id: 'others',
       });
     }
 
@@ -257,10 +269,14 @@ export async function POST(req: Request) {
 
     const preferenceData = await preferenceRes.json();
 
+    const redirectUrl = isTestToken
+      ? (preferenceData.sandbox_init_point || preferenceData.init_point)
+      : (preferenceData.init_point || preferenceData.sandbox_init_point);
+
     return NextResponse.json({
       success: true,
       orderId,
-      initPoint: preferenceData.init_point || preferenceData.sandbox_init_point || `${siteUrl}/dashboard?pedido=${orderId}`,
+      initPoint: redirectUrl || `${siteUrl}/dashboard?pedido=${orderId}`,
     });
 
   } catch (error: any) {
