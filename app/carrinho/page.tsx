@@ -417,7 +417,7 @@ export default function CarrinhoPage() {
                       cursor: 'pointer',
                       display: 'flex',
                       alignItems: 'center',
-                      justify: 'center',
+                      justifyContent: 'center',
                       gap: 8
                     }}
                   >
@@ -438,7 +438,7 @@ export default function CarrinhoPage() {
                       cursor: 'pointer',
                       display: 'flex',
                       alignItems: 'center',
-                      justify: 'center',
+                      justifyContent: 'center',
                       gap: 8
                     }}
                   >
@@ -486,7 +486,7 @@ export default function CarrinhoPage() {
                   )}
 
                   {/* RESUMO FINANCEIRO */}
-                  <div style={{ borderTop: '1px solid #e5e7eb', pt: 16, paddingTop: 16, marginBottom: 20 }}>
+                  <div style={{ borderTop: '1px solid #e5e7eb', paddingTop: 16, marginBottom: 20 }}>
                     <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 13, color: '#6b7280', marginBottom: 6 }}>
                       <span>Subtotal:</span>
                       <span>R$ {subtotal.toFixed(2).replace('.', ',')}</span>
