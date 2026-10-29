@@ -7,13 +7,19 @@ import { useRouter } from 'next/navigation';
 import { useCartStore } from '@/store/useCartStore';
 import { 
   ShoppingBag, Trash2, ArrowLeft, ShieldCheck, Tag, Check, Truck, 
-  MapPin, Loader2, CreditCard, QrCode, Copy, CheckCircle2, Lock
+  MapPin, Loader2, CreditCard, QrCode, Copy, CheckCircle2, Lock, AlertCircle
 } from 'lucide-react';
+
+const fmt = (v?: number | null) => {
+  if (v === undefined || v === null || isNaN(v)) return 'R$ 0,00';
+  return `R$ ${v.toFixed(2).replace('.', ',')}`;
+};
 
 export default function CarrinhoPage() {
   const router = useRouter();
   const { items, removeItem, updateQuantity, clearCart } = useCartStore();
 
+  const [isMounted, setIsMounted] = useState(false);
   const [isLogged, setIsLogged] = useState(false);
   const [userData, setUserData] = useState({ id: '', nome: '', email: '', cpf: '', telefone: '' });
 
@@ -25,19 +31,18 @@ export default function CarrinhoPage() {
   const [cidade, setCidade] = useState('');
   const [estado, setEstado] = useState('');
   const [complemento, setComplemento] = useState('');
-  const [loadingCep, setLoadingCep] = useState(false);
 
   // Cupom
   const [cupomInput, setCupomInput] = useState('');
-  const [cupomAplicado, setCupomAplicado] = useState<{ codigo: string; valor: number; tipo: string } | null>(null);
-  const [erroCupom, setErroCupom] = useState('');
-  const [loadingCupom, setLoadingCupom] = useState(false);
+  const [aplicandoCupom, setAplicandoCupom] = useState(false);
+  const [cupomAplicado, setCupomAplicado] = useState<{ codigo: string; desconto: number } | null>(null);
+  const [cupomErro, setCupomErro] = useState('');
 
   // Frete
-  const [valorFrete, setValorFrete] = useState(0);
-  const [freteOpcoes, setFreteOpcoes] = useState<{ id?: string; nome: string; valor: number; prazo: number }[]>([]);
-  const [freteSelecionado, setFreteSelecionado] = useState<{ nome: string; valor: number } | null>(null);
   const [calculandoFrete, setCalculandoFrete] = useState(false);
+  const [freteOpcoes, setFreteOpcoes] = useState<{ nome: string; valor: number; prazo: number }[]>([]);
+  const [freteSelecionado, setFreteSelecionado] = useState<{ nome: string; valor: number } | null>(null);
+  const [freteErro, setFreteErro] = useState('');
 
   // Forma de Pagamento Transparente
   const [metodoPagamento, setMetodoPagamento] = useState<'pix' | 'cartao'>('pix');
@@ -56,6 +61,8 @@ export default function CarrinhoPage() {
   const [parcelas, setParcelas] = useState(1);
 
   useEffect(() => {
+    setIsMounted(true);
+
     const session = localStorage.getItem('user_session');
     if (session) {
       try {
@@ -68,7 +75,9 @@ export default function CarrinhoPage() {
           cpf: u.cpf || '',
           telefone: u.telefone || '',
         });
-      } catch {}
+      } catch (e) {
+        console.warn('Erro ao ler sessão local:', e);
+      }
     }
 
     const addr = localStorage.getItem('user_address');
@@ -82,106 +91,133 @@ export default function CarrinhoPage() {
         setCidade(a.cidade || '');
         setEstado(a.estado || '');
         setComplemento(a.complemento || '');
-        if (a.cep && a.cep.replace(/\D/g, '').length === 8) {
-          calcularOpcoesFrete(a.cep.replace(/\D/g, ''));
-        }
-      } catch {}
+      } catch (e) {
+        console.warn('Erro ao ler endereço salvo:', e);
+      }
     }
   }, []);
 
-  const subtotal = items.reduce((acc, item) => acc + (item.price || item.preco || 0) * item.quantity, 0);
-
-  let valorDesconto = 0;
-  if (cupomAplicado) {
-    if (cupomAplicado.tipo.toLowerCase().includes('percent')) {
-      valorDesconto = (subtotal * cupomAplicado.valor) / 100;
-    } else {
-      valorDesconto = cupomAplicado.valor;
-    }
-    valorDesconto = Math.min(valorDesconto, subtotal);
+  if (!isMounted) {
+    return (
+      <div style={{ minHeight: '100vh', background: '#f7f4ee', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+        <Loader2 size={40} className="animate-spin" color="#15803d" />
+      </div>
+    );
   }
 
-  const total = Math.max(0, subtotal - valorDesconto + valorFrete);
+  // Cálculos de Valores
+  const subtotal = items.reduce((acc, it) => acc + ((it.preco || (it as any).price || 0) * it.quantity), 0);
+  const valorFrete = freteSelecionado ? freteSelecionado.valor : 0;
+  const valorDesconto = cupomAplicado ? cupomAplicado.desconto : 0;
+  const total = Math.max(0, subtotal + valorFrete - valorDesconto);
 
-  const calcularOpcoesFrete = async (cleanCep: string) => {
-    setCalculandoFrete(true);
+  // CÁLCULO OFICIAL DE FRETE
+  const handleCalcularFrete = async (e?: React.FormEvent) => {
+    if (e) e.preventDefault();
+    setFreteErro('');
     setFreteOpcoes([]);
+    setFreteSelecionado(null);
 
+    const cepLimpo = cep.replace(/\D/g, '');
+    if (cepLimpo.length !== 8) {
+      setFreteErro('Por favor, insira um CEP válido de 8 dígitos.');
+      return;
+    }
+
+    setCalculandoFrete(true);
+
+    // Auto-preenchimento do Endereço via ViaCEP
+    try {
+      const viaCepRes = await fetch(`https://viacep.com.br/ws/${cepLimpo}/json/`);
+      const viaCepData = await viaCepRes.json();
+      if (!viaCepData.erro) {
+        setRua(viaCepData.logradouro || '');
+        setBairro(viaCepData.bairro || '');
+        setCidade(viaCepData.localidade || '');
+        setEstado(viaCepData.uf || '');
+      }
+    } catch (err) {
+      console.warn('Erro ao consultar ViaCEP:', err);
+    }
+
+    // Chamada oficial da cotação
     try {
       const res = await fetch('/api/shipping/calculate', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ cepDestino: cleanCep, itens: items }),
+        body: JSON.stringify({ cepDestino: cepLimpo, itens: items }),
       });
 
       const data = await res.json();
-      if (res.ok && Array.isArray(data.opcoes) && data.opcoes.length > 0) {
-        setFreteOpcoes(data.opcoes);
-        const primeira = data.opcoes[0];
-        setFreteSelecionado({ nome: primeira.nome, valor: primeira.valor });
-        setValorFrete(primeira.valor);
-      } else {
-        throw new Error(data.error || 'Nenhuma opção retornada.');
+      if (!res.ok) {
+        throw new Error(data.error || 'Erro ao calcular frete.');
       }
-    } catch (err) {
-      console.warn('Usando opções simuladas de frete:', err);
+
+      const opcoesCalculadas = data.opcoes || [];
+      setFreteOpcoes(opcoesCalculadas);
+      
+      if (opcoesCalculadas.length > 0) {
+        const primeiraOpcao = opcoesCalculadas[0];
+        if (primeiraOpcao) {
+          setFreteSelecionado({
+            nome: primeiraOpcao.nome,
+            valor: primeiraOpcao.valor,
+          });
+        }
+      } else {
+        setFreteErro('Nenhuma opção de frete disponível para este CEP.');
+      }
+    } catch (err: any) {
+      console.warn('Usando fallback de frete offline:', err);
       const fallbackOptions = [
-        { id: '1', nome: 'Correios (SEDEX)', valor: subtotal > 150 ? 0 : 22.50, prazo: 3 },
-        { id: '2', nome: 'Correios (PAC)', valor: subtotal > 150 ? 0 : 14.90, prazo: 7 },
-        { id: '3', nome: 'Jadlog (.COM)', valor: subtotal > 150 ? 0 : 18.20, prazo: 5 },
+        { nome: 'Correios (SEDEX)', valor: subtotal > 150 ? 0 : 22.50, prazo: 3 },
+        { nome: 'Correios (PAC)', valor: subtotal > 150 ? 0 : 14.90, prazo: 7 },
+        { nome: 'Jadlog (.COM)', valor: subtotal > 150 ? 0 : 18.20, prazo: 5 },
+        { nome: 'Jadlog (PACKAGE)', valor: subtotal > 150 ? 0 : 16.50, prazo: 6 }
       ];
       setFreteOpcoes(fallbackOptions);
-      setFreteSelecionado({ nome: fallbackOptions[0].nome, valor: fallbackOptions[0].valor });
-      setValorFrete(fallbackOptions[0].valor);
+      setFreteSelecionado({ 
+        nome: fallbackOptions[0].nome, 
+        valor: fallbackOptions[0].valor 
+      });
     } finally {
       setCalculandoFrete(false);
     }
   };
 
-  const buscarCep = async (cepDigitado: string) => {
-    setCep(cepDigitado);
-    const cleanCep = cepDigitado.replace(/\D/g, '');
-    if (cleanCep.length === 8) {
-      setLoadingCep(true);
-      try {
-        const res = await fetch(`https://viacep.com.br/ws/${cleanCep}/json/`);
-        const data = await res.json();
-        if (!data.erro) {
-          setRua(data.logradouro || '');
-          setBairro(data.bairro || '');
-          setCidade(data.localidade || '');
-          setEstado(data.uf || '');
-        }
-      } catch {} finally {
-        setLoadingCep(false);
-      }
-      await calcularOpcoesFrete(cleanCep);
-    }
-  };
+  // VALIDAÇÃO DE CUPOM
+  const handleAplicarCupom = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setCupomErro('');
+    setCupomAplicado(null);
 
-  const aplicarCupom = async () => {
     if (!cupomInput.trim()) return;
-    setLoadingCupom(true);
-    setErroCupom('');
+
+    setAplicandoCupom(true);
     try {
-      const res = await fetch('/api/validate-coupon', {
+      const res = await fetch('/api/coupons/validate', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ codigo: cupomInput.toUpperCase().trim(), subtotal }),
       });
+
       const data = await res.json();
-      if (res.ok && data.valid) {
-        setCupomAplicado({ codigo: data.cupom.codigo, valor: data.cupom.valor, tipo: data.cupom.tipo });
-      } else {
-        setErroCupom(data.error || 'Cupom inválido ou expirado.');
+      if (!res.ok) {
+        throw new Error(data.error || 'Cupom inválido.');
       }
-    } catch {
-      setErroCupom('Erro ao validar cupom.');
+
+      setCupomAplicado({
+        codigo: data.codigo || cupomInput.toUpperCase(),
+        desconto: Number(data.desconto || 0),
+      });
+    } catch (err: any) {
+      setCupomErro(err.message || 'Cupom inválido ou expirado.');
     } finally {
-      setLoadingCupom(false);
+      setAplicandoCupom(false);
     }
   };
 
+  // PROCESSAMENTO DO CHECKOUT TRANSPARENTE
   const handleProcessarPagamentoTransparente = async (e: React.FormEvent) => {
     e.preventDefault();
     setErroCheckout('');
@@ -229,7 +265,7 @@ export default function CarrinhoPage() {
       const data = await res.json();
 
       if (!res.ok) {
-        throw new Error(data.error || 'Erro ao processar o pagamento transparente.');
+        throw new Error(data.error || 'Erro ao processar o pagamento.');
       }
 
       clearCart();
@@ -246,7 +282,7 @@ export default function CarrinhoPage() {
 
     } catch (err: any) {
       console.error('Erro no checkout transparente:', err);
-      setErroCheckout(err.message || 'Ocorreu um erro ao processar seu pedido. Tente novamente.');
+      setErroCheckout(err.message || 'Ocorreu um erro ao processar seu pedido.');
     } finally {
       setLoadingCheckout(false);
     }
@@ -283,12 +319,12 @@ export default function CarrinhoPage() {
             <ArrowLeft size={16} /> Voltar às Compras
           </Link>
           <span style={{ fontSize: 12, fontWeight: 800, color: '#166534', background: '#dcfce7', padding: '6px 12px', borderRadius: 999, display: 'inline-flex', alignItems: 'center', gap: 6 }}>
-            <ShieldCheck size={15} /> Ambientes e Checkout 100% Protegidos
+            <ShieldCheck size={15} /> Ambiente e Checkout 100% Seguros
           </span>
         </div>
 
         <h1 style={{ fontSize: 24, fontWeight: 900, marginBottom: 24, color: '#0d2410' }}>
-          Checkout Transparente BIOFLOW
+          Meu Carrinho & Checkout
         </h1>
 
         {erroCheckout && (
@@ -381,28 +417,75 @@ export default function CarrinhoPage() {
                 </div>
               </div>
 
+              {/* CARD DE CÁLCULO DE FRETE RESTAURADO E OFICIAL */}
+              <div style={{ background: 'white', border: '1px solid #e7e2d6', borderRadius: 20, padding: 20 }}>
+                <h3 style={{ fontSize: 14, fontWeight: 900, marginBottom: 10, display: 'flex', alignItems: 'center', gap: 6, color: '#0d2410' }}>
+                  <Truck size={16} color="#15803d" /> Opções de Entrega (Melhor Envio)
+                </h3>
+                <form onSubmit={handleCalcularFrete} style={{ display: 'flex', gap: 8, marginBottom: 12 }}>
+                  <input 
+                    type="text" 
+                    placeholder="Digite seu CEP (Ex: 16600-023)" 
+                    value={cep}
+                    onChange={(e) => setCep(e.target.value)}
+                    style={{ flex: 1, padding: '10px 12px', borderRadius: 8, border: '1px solid #d1d5db', fontSize: 13, outline: 'none' }}
+                  />
+                  <button 
+                    type="submit" 
+                    disabled={calculandoFrete}
+                    style={{ background: '#0d2410', color: 'white', border: 'none', borderRadius: 8, padding: '0 16px', fontSize: 12, fontWeight: 800, cursor: 'pointer' }}
+                  >
+                    {calculandoFrete ? <Loader2 size={14} className="animate-spin" /> : 'Calcular'}
+                  </button>
+                </form>
+
+                {freteErro && <p style={{ fontSize: 12, color: '#b91c1c', marginTop: 8, fontWeight: 600 }}>{freteErro}</p>}
+                
+                {freteOpcoes.length > 0 && (
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+                    {freteOpcoes.map((opcao) => (
+                      <label 
+                        key={opcao.nome} 
+                        style={{ 
+                          display: 'flex', 
+                          alignItems: 'center', 
+                          justifyContent: 'space-between', 
+                          background: freteSelecionado?.nome === opcao.nome ? '#f0fdf4' : '#f9fafb',
+                          border: freteSelecionado?.nome === opcao.nome ? '2px solid #15803d' : '1px solid #e5e7eb',
+                          padding: '10px 12px', 
+                          borderRadius: 8, 
+                          cursor: 'pointer',
+                          fontSize: 12.5,
+                          transition: 'all 0.2s ease'
+                        }}
+                      >
+                        <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                          <input 
+                            type="radio" 
+                            name="opcaoFrete" 
+                            checked={freteSelecionado?.nome === opcao.nome}
+                            onChange={() => setFreteSelecionado({ nome: opcao.nome, valor: opcao.valor })}
+                            style={{ accentColor: '#15803d' }}
+                          />
+                          <div>
+                            <span style={{ fontWeight: 700, color: '#111827' }}>{opcao.nome}</span>
+                            <p style={{ fontSize: 11, color: '#6b7280', margin: '2px 0 0' }}>Prazo: {opcao.prazo} dias úteis</p>
+                          </div>
+                        </div>
+                        <span style={{ fontWeight: 800, color: '#15803d' }}>{opcao.valor === 0 ? 'Grátis' : fmt(opcao.valor)}</span>
+                      </label>
+                    ))}
+                  </div>
+                )}
+              </div>
+
               {/* FORMULÁRIO DE ENDEREÇO DE ENTREGA */}
               <div style={{ background: 'white', borderRadius: 20, border: '1px solid #e7e2d6', padding: 20 }}>
                 <h2 style={{ fontSize: 15, fontWeight: 900, color: '#0d2410', marginBottom: 16, display: 'flex', alignItems: 'center', gap: 8 }}>
-                  <MapPin size={18} color="#15803d" /> Endereço de Entrega
+                  <MapPin size={18} color="#15803d" /> Endereço Completo de Entrega
                 </h2>
 
                 <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
-                  <div style={{ gridColumn: 'span 2' }}>
-                    <label style={{ fontSize: 11.5, fontWeight: 800, color: '#4b5563', display: 'block', marginBottom: 4 }}>CEP *</label>
-                    <div style={{ display: 'flex', gap: 8 }}>
-                      <input 
-                        type="text" 
-                        value={cep} 
-                        onChange={e => buscarCep(e.target.value)} 
-                        placeholder="Ex: 16603-268" 
-                        style={{ flex: 1, padding: '9px 12px', borderRadius: 8, border: '1px solid #d1d5db', fontSize: 13 }} 
-                        required 
-                      />
-                      {loadingCep && <Loader2 size={20} className="animate-spin" color="#15803d" style={{ alignSelf: 'center' }} />}
-                    </div>
-                  </div>
-
                   <div style={{ gridColumn: 'span 2' }}>
                     <label style={{ fontSize: 11.5, fontWeight: 800, color: '#4b5563', display: 'block', marginBottom: 4 }}>Rua / Avenida *</label>
                     <input type="text" value={rua} onChange={e => setRua(e.target.value)} style={{ width: '100%', padding: '9px 12px', borderRadius: 8, border: '1px solid #d1d5db', fontSize: 13 }} required />
@@ -430,62 +513,31 @@ export default function CarrinhoPage() {
                 </div>
               </div>
 
-              {/* OPÇÕES DE FRETE E ENTREGA */}
-              <div style={{ background: 'white', borderRadius: 20, border: '1px solid #e7e2d6', padding: 20 }}>
-                <h2 style={{ fontSize: 15, fontWeight: 900, color: '#0d2410', marginBottom: 16, display: 'flex', alignItems: 'center', gap: 8 }}>
-                  <Truck size={18} color="#15803d" /> Opções de Frete e Entrega
-                </h2>
-
-                {calculandoFrete ? (
-                  <div style={{ display: 'flex', alignItems: 'center', gap: 8, padding: 12, fontSize: 13, color: '#4b5563' }}>
-                    <Loader2 size={18} className="animate-spin" color="#15803d" />
-                    Calculando melhores opções de frete para o seu CEP...
-                  </div>
-                ) : freteOpcoes.length > 0 ? (
-                  <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
-                    {freteOpcoes.map((opcao) => {
-                      const isSelected = freteSelecionado?.nome === opcao.nome;
-                      return (
-                        <label
-                          key={opcao.nome}
-                          style={{
-                            display: 'flex',
-                            alignItems: 'center',
-                            justifyContent: 'space-between',
-                            background: isSelected ? '#f0fdf4' : '#f9fafb',
-                            border: isSelected ? '2px solid #15803d' : '1px solid #e5e7eb',
-                            padding: '12px 14px',
-                            borderRadius: 12,
-                            cursor: 'pointer',
-                            transition: 'all 0.15s ease'
-                          }}
-                        >
-                          <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-                            <input
-                              type="radio"
-                              name="opcaoFrete"
-                              checked={isSelected}
-                              onChange={() => {
-                                setFreteSelecionado({ nome: opcao.nome, valor: opcao.valor });
-                                setValorFrete(opcao.valor);
-                              }}
-                              style={{ accentColor: '#15803d', width: 16, height: 16, cursor: 'pointer' }}
-                            />
-                            <div>
-                              <span style={{ fontWeight: 800, fontSize: 13, color: '#111827' }}>{opcao.nome}</span>
-                              <p style={{ fontSize: 11.5, color: '#6b7280', margin: '2px 0 0' }}>Prazo estimado: {opcao.prazo} dias úteis</p>
-                            </div>
-                          </div>
-                          <span style={{ fontWeight: 900, fontSize: 13.5, color: '#15803d' }}>
-                            {opcao.valor === 0 ? 'Grátis' : `R$ ${opcao.valor.toFixed(2).replace('.', ',')}`}
-                          </span>
-                        </label>
-                      );
-                    })}
-                  </div>
-                ) : (
-                  <p style={{ fontSize: 12.5, color: '#6b7280', margin: 0 }}>
-                    Digite um CEP de 8 dígitos no formulário acima para listar os valores e prazos do frete (SEDEX, PAC, Jadlog).
+              {/* CARD DE CUPOM */}
+              <div style={{ background: 'white', border: '1px solid #e7e2d6', borderRadius: 20, padding: 20 }}>
+                <h3 style={{ fontSize: 14, fontWeight: 900, marginBottom: 10, display: 'flex', alignItems: 'center', gap: 6, color: '#0d2410' }}>
+                  <Tag size={16} color="#15803d" /> Cupom de Desconto
+                </h3>
+                <form onSubmit={handleAplicarCupom} style={{ display: 'flex', gap: 8 }}>
+                  <input 
+                    type="text" 
+                    placeholder="Código do cupom (Ex: BOASVINDAS)" 
+                    value={cupomInput}
+                    onChange={(e) => setCupomInput(e.target.value)}
+                    style={{ flex: 1, padding: '10px 12px', borderRadius: 8, border: '1px solid #d1d5db', fontSize: 13, outline: 'none', textTransform: 'uppercase' }}
+                  />
+                  <button 
+                    type="submit" 
+                    disabled={aplicandoCupom}
+                    style={{ background: '#0d2410', color: 'white', border: 'none', borderRadius: 8, padding: '0 16px', fontSize: 12, fontWeight: 800, cursor: 'pointer' }}
+                  >
+                    {aplicandoCupom ? <Loader2 size={14} className="animate-spin" /> : 'Aplicar'}
+                  </button>
+                </form>
+                {cupomErro && <p style={{ fontSize: 12, color: '#b91c1c', marginTop: 8, fontWeight: 600 }}>{cupomErro}</p>}
+                {cupomAplicado && (
+                  <p style={{ fontSize: 12, color: '#15803d', marginTop: 8, fontWeight: 700 }}>
+                    ✓ Cupom {cupomAplicado.codigo} aplicado com sucesso!
                   </p>
                 )}
               </div>
@@ -520,7 +572,7 @@ export default function CarrinhoPage() {
                       gap: 8
                     }}
                   >
-                    <QrCode size={18} /> Pix (Aprovação Instantânea)
+                    <QrCode size={18} /> Pix (Instantâneo)
                   </button>
 
                   <button
@@ -588,24 +640,24 @@ export default function CarrinhoPage() {
                   <div style={{ borderTop: '1px solid #e5e7eb', paddingTop: 16, marginBottom: 20 }}>
                     <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 13, color: '#6b7280', marginBottom: 6 }}>
                       <span>Subtotal:</span>
-                      <span>R$ {subtotal.toFixed(2).replace('.', ',')}</span>
+                      <span>{fmt(subtotal)}</span>
                     </div>
 
                     {valorDesconto > 0 && (
                       <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 13, color: '#15803d', fontWeight: 700, marginBottom: 6 }}>
                         <span>Desconto Cupom ({cupomAplicado?.codigo}):</span>
-                        <span>- R$ {valorDesconto.toFixed(2).replace('.', ',')}</span>
+                        <span>- {fmt(valorDesconto)}</span>
                       </div>
                     )}
 
                     <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 13, color: '#6b7280', marginBottom: 12 }}>
                       <span>Frete ({freteSelecionado?.nome || 'A calcular'}):</span>
-                      <span>{valorFrete > 0 ? `R$ ${valorFrete.toFixed(2).replace('.', ',')}` : 'Grátis'}</span>
+                      <span>{valorFrete > 0 ? fmt(valorFrete) : (freteSelecionado ? 'Grátis' : 'A calcular')}</span>
                     </div>
 
                     <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 17, fontWeight: 900, color: '#0d2410', borderTop: '1px solid #e5e7eb', paddingTop: 12 }}>
                       <span>Total:</span>
-                      <span style={{ color: '#15803d' }}>R$ {total.toFixed(2).replace('.', ',')}</span>
+                      <span style={{ color: '#15803d' }}>{fmt(total)}</span>
                     </div>
                   </div>
 
