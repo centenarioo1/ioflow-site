@@ -35,7 +35,9 @@ export default function CarrinhoPage() {
 
   // Frete
   const [valorFrete, setValorFrete] = useState(0);
+  const [freteOpcoes, setFreteOpcoes] = useState<{ id?: string; nome: string; valor: number; prazo: number }[]>([]);
   const [freteSelecionado, setFreteSelecionado] = useState<{ nome: string; valor: number } | null>(null);
+  const [calculandoFrete, setCalculandoFrete] = useState(false);
 
   // Forma de Pagamento Transparente
   const [metodoPagamento, setMetodoPagamento] = useState<'pix' | 'cartao'>('pix');
@@ -80,6 +82,9 @@ export default function CarrinhoPage() {
         setCidade(a.cidade || '');
         setEstado(a.estado || '');
         setComplemento(a.complemento || '');
+        if (a.cep && a.cep.replace(/\D/g, '').length === 8) {
+          calcularOpcoesFrete(a.cep.replace(/\D/g, ''));
+        }
       } catch {}
     }
   }, []);
@@ -98,6 +103,41 @@ export default function CarrinhoPage() {
 
   const total = Math.max(0, subtotal - valorDesconto + valorFrete);
 
+  const calcularOpcoesFrete = async (cleanCep: string) => {
+    setCalculandoFrete(true);
+    setFreteOpcoes([]);
+
+    try {
+      const res = await fetch('/api/shipping/calculate', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ cepDestino: cleanCep, itens: items }),
+      });
+
+      const data = await res.json();
+      if (res.ok && Array.isArray(data.opcoes) && data.opcoes.length > 0) {
+        setFreteOpcoes(data.opcoes);
+        const primeira = data.opcoes[0];
+        setFreteSelecionado({ nome: primeira.nome, valor: primeira.valor });
+        setValorFrete(primeira.valor);
+      } else {
+        throw new Error(data.error || 'Nenhuma opção retornada.');
+      }
+    } catch (err) {
+      console.warn('Usando opções simuladas de frete:', err);
+      const fallbackOptions = [
+        { id: '1', nome: 'Correios (SEDEX)', valor: subtotal > 150 ? 0 : 22.50, prazo: 3 },
+        { id: '2', nome: 'Correios (PAC)', valor: subtotal > 150 ? 0 : 14.90, prazo: 7 },
+        { id: '3', nome: 'Jadlog (.COM)', valor: subtotal > 150 ? 0 : 18.20, prazo: 5 },
+      ];
+      setFreteOpcoes(fallbackOptions);
+      setFreteSelecionado({ nome: fallbackOptions[0].nome, valor: fallbackOptions[0].valor });
+      setValorFrete(fallbackOptions[0].valor);
+    } finally {
+      setCalculandoFrete(false);
+    }
+  };
+
   const buscarCep = async (cepDigitado: string) => {
     setCep(cepDigitado);
     const cleanCep = cepDigitado.replace(/\D/g, '');
@@ -111,12 +151,11 @@ export default function CarrinhoPage() {
           setBairro(data.bairro || '');
           setCidade(data.localidade || '');
           setEstado(data.uf || '');
-          setValorFrete(19.90);
-          setFreteSelecionado({ nome: 'Entrega Padrão (Melhor Envio)', valor: 19.90 });
         }
       } catch {} finally {
         setLoadingCep(false);
       }
+      await calcularOpcoesFrete(cleanCep);
     }
   };
 
@@ -389,6 +428,66 @@ export default function CarrinhoPage() {
                     <input type="text" value={cidade ? `${cidade}/${estado}` : ''} onChange={e => setCidade(e.target.value)} style={{ width: '100%', padding: '9px 12px', borderRadius: 8, border: '1px solid #d1d5db', fontSize: 13 }} required />
                   </div>
                 </div>
+              </div>
+
+              {/* OPÇÕES DE FRETE E ENTREGA */}
+              <div style={{ background: 'white', borderRadius: 20, border: '1px solid #e7e2d6', padding: 20 }}>
+                <h2 style={{ fontSize: 15, fontWeight: 900, color: '#0d2410', marginBottom: 16, display: 'flex', alignItems: 'center', gap: 8 }}>
+                  <Truck size={18} color="#15803d" /> Opções de Frete e Entrega
+                </h2>
+
+                {calculandoFrete ? (
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 8, padding: 12, fontSize: 13, color: '#4b5563' }}>
+                    <Loader2 size={18} className="animate-spin" color="#15803d" />
+                    Calculando melhores opções de frete para o seu CEP...
+                  </div>
+                ) : freteOpcoes.length > 0 ? (
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+                    {freteOpcoes.map((opcao) => {
+                      const isSelected = freteSelecionado?.nome === opcao.nome;
+                      return (
+                        <label
+                          key={opcao.nome}
+                          style={{
+                            display: 'flex',
+                            alignItems: 'center',
+                            justifyContent: 'space-between',
+                            background: isSelected ? '#f0fdf4' : '#f9fafb',
+                            border: isSelected ? '2px solid #15803d' : '1px solid #e5e7eb',
+                            padding: '12px 14px',
+                            borderRadius: 12,
+                            cursor: 'pointer',
+                            transition: 'all 0.15s ease'
+                          }}
+                        >
+                          <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+                            <input
+                              type="radio"
+                              name="opcaoFrete"
+                              checked={isSelected}
+                              onChange={() => {
+                                setFreteSelecionado({ nome: opcao.nome, valor: opcao.valor });
+                                setValorFrete(opcao.valor);
+                              }}
+                              style={{ accentColor: '#15803d', width: 16, height: 16, cursor: 'pointer' }}
+                            />
+                            <div>
+                              <span style={{ fontWeight: 800, fontSize: 13, color: '#111827' }}>{opcao.nome}</span>
+                              <p style={{ fontSize: 11.5, color: '#6b7280', margin: '2px 0 0' }}>Prazo estimado: {opcao.prazo} dias úteis</p>
+                            </div>
+                          </div>
+                          <span style={{ fontWeight: 900, fontSize: 13.5, color: '#15803d' }}>
+                            {opcao.valor === 0 ? 'Grátis' : `R$ ${opcao.valor.toFixed(2).replace('.', ',')}`}
+                          </span>
+                        </label>
+                      );
+                    })}
+                  </div>
+                ) : (
+                  <p style={{ fontSize: 12.5, color: '#6b7280', margin: 0 }}>
+                    Digite um CEP de 8 dígitos no formulário acima para listar os valores e prazos do frete (SEDEX, PAC, Jadlog).
+                  </p>
+                )}
               </div>
 
             </div>
