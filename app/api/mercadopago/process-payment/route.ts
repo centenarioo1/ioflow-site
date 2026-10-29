@@ -228,7 +228,7 @@ export async function POST(req: Request) {
     }
 
     // URL configurável via variável de ambiente MP_PAYMENTS_URL
-    const mpApiEndpoint = process.env.MP_PAYMENTS_URL || 'https://api.mercadopago.com/checkout/preferences';
+    const mpApiEndpoint = process.env.MP_PAYMENTS_URL || 'https://api.mercadopago.com/v1/payments';
 
     const mpRes = await fetch(mpApiEndpoint, {
       method: 'POST',
