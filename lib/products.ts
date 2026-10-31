@@ -203,7 +203,7 @@ const catalogoBase: ProductBase[] = [
     features: ['Rico em ácidos húmicos e fúlvicos', 'Melhora capacidade de retenção de água', 'Totalmente atóxico'],
     images: ['/images/products/humus-minhoca.jpg'],
     variants: [
-      //{ id: '199187589658', size: '2KG', price: 19.50, originalPrice: 22.50, stock: 100, weight: 2000, dimensions: { height: 8, width: 30, length: 20 } }, // Removido do Supabase
+      { id: '199187589658', size: '2KG', price: 19.50, originalPrice: 22.50, stock: 100, weight: 2000, dimensions: { height: 8, width: 30, length: 20 } },
       { id: '238802856194', size: '5KG', price: 32.50, originalPrice: 36.90, stock: 100, weight: 5000, dimensions: { height: 8, width: 35, length: 25 } },
       { id: '229439358068', size: '10KG', price: 45.50, originalPrice: 51.90, stock: 100, weight: 10000, dimensions: { height: 12, width: 40, length: 30 } },
       { id: '179414529814', size: '20KG', price: 60.90, originalPrice: 69.50, stock: 100, weight: 20000, dimensions: { height: 15, width: 45, length: 35 } },
@@ -290,16 +290,21 @@ const INFO_CATEGORIA: Record<
 
 function normalizar(p: ProductBase): Product {
   const info = INFO_CATEGORIA[p.category];
-  const disponiveis = p.variants.filter((v) => v.stock > 0);
-  const base = disponiveis.length > 0 ? disponiveis : p.variants;
+  
+  // 🟢 Ordena as variações automaticamente do menor para o maior preço
+  const variantesOrdenadas = [...p.variants].sort((a, b) => a.price - b.price);
+  
+  const disponiveis = variantesOrdenadas.filter((v) => v.stock > 0);
+  const base = disponiveis.length > 0 ? disponiveis : variantesOrdenadas;
   const maisBarata = base.reduce((menor, v) => (v.price < menor.price ? v : menor), base[0]);
-  const estoque = p.variants.reduce((acc, v) => acc + v.stock, 0);
+  const estoque = variantesOrdenadas.reduce((acc, v) => acc + v.stock, 0);
 
   return {
     ...p,
+    variants: variantesOrdenadas,
     nome: p.name,
     categoria: info.categoria,
-    subtitulo: p.variants.map((v) => v.size).join(' · '),
+    subtitulo: variantesOrdenadas.map((v) => v.size).join(' · '),
     descricao: p.description,
     descricaoCurta: p.description,
     tags: [...p.features, info.fase, p.category, p.slug.split('-').join(' ')],
