@@ -134,7 +134,7 @@ export default function AdminPage() {
     setCarregandoProdutos(true);
     setErroProdutos('');
     try {
-      const res = await fetch('/api/admin/products');
+      const res = await fetch('/api/admin/products', { cache: 'no-store' });
       if (res.status === 401 || res.status === 403) {
         router.push('/login?redirect=/admin');
         return;
@@ -701,7 +701,7 @@ export default function AdminPage() {
                       {/* Lista de Variações Existentes com Botão de Remover */}
                       <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
                         {p.variants && p.variants.length > 0 ? (
-                          p.variants.map((v, vIdx) => {
+                          [...p.variants].sort((a, b) => a.price - b.price).map((v, vIdx) => {
                             const varKey = v.id || `${p.id}-${v.size}-${vIdx}`;
                             const isExcluindo = excluindoId === `${p.id}-${varKey}` || excluindoId === `${p.id}-${v.id}`;
                             return (
