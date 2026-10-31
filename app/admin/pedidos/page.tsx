@@ -4,7 +4,7 @@
 import React, { useEffect, useState, useCallback } from 'react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
-import { Loader2, Package, RefreshCw, LogOut, ShieldCheck } from 'lucide-react';
+import { Loader2, Package, RefreshCw, LogOut, ShieldCheck, Plus, ListOrdered, CheckCircle2, AlertCircle } from 'lucide-react';
 
 interface AdminOrder {
   id: string;
@@ -37,10 +37,29 @@ const fmt = (v: number) => `R$ ${v.toFixed(2).replace('.', ',')}`;
 
 export default function AdminPage() {
   const router = useRouter();
+  const [abaAtiva, setAbaAtiva] = useState<'pedidos' | 'novo-produto'>('pedidos');
+  
+  // Estado Pedidos
   const [orders, setOrders] = useState<AdminOrder[]>([]);
   const [carregando, setCarregando] = useState(true);
   const [erro, setErro] = useState('');
   const [salvandoId, setSalvandoId] = useState<string | null>(null);
+
+  // Estado Novo Produto
+  const [nome, setNome] = useState('');
+  const [slug, setSlug] = useState('');
+  const [categoria, setCategoria] = useState('substratos');
+  const [description, setDescription] = useState('');
+  const [featuresInput, setFeaturesInput] = useState('');
+  const [imageUrl, setImageUrl] = useState('');
+  
+  // Variantes do produto
+  const [variantes, setVariantes] = useState([
+    { size: '5L', price: 32.50, originalPrice: 36.90, stock: 100, weight: 1000, height: 8, width: 25, length: 35 }
+  ]);
+  const [salvandoProduto, setSalvandoProduto] = useState(false);
+  const [sucessoProduto, setSucessoProduto] = useState('');
+  const [erroProduto, setErroProduto] = useState('');
 
   const carregar = useCallback(async () => {
     setCarregando(true);
@@ -68,6 +87,18 @@ export default function AdminPage() {
     carregar();
   }, [carregar]);
 
+  // Gerar Slug Automático a partir do Nome
+  const handleNomeChange = (val: string) => {
+    setNome(val);
+    const s = val
+      .toLowerCase()
+      .normalize('NFD')
+      .replace(/[\u0300-\u036f]/g, '')
+      .replace(/[^a-z0-9]+/g, '-')
+      .replace(/^-+|-+$/g, '');
+    setSlug(s);
+  };
+
   const mudarStatus = async (orderId: string, status: string) => {
     setSalvandoId(orderId);
     try {
@@ -86,6 +117,67 @@ export default function AdminPage() {
       setErro('Erro de conexão ao atualizar status.');
     } finally {
       setSalvandoId(null);
+    }
+  };
+
+  const adicionarVariante = () => {
+    setVariantes(prev => [
+      ...prev,
+      { size: '10L', price: 49.90, originalPrice: 56.90, stock: 100, weight: 2000, height: 12, width: 30, length: 40 }
+    ]);
+  };
+
+  const removerVariante = (idx: number) => {
+    if (variantes.length === 1) return;
+    setVariantes(prev => prev.filter((_, i) => i !== idx));
+  };
+
+  const atualizarVariante = (idx: number, campo: string, valor: any) => {
+    setVariantes(prev => prev.map((v, i) => i === idx ? { ...v, [campo]: valor } : v));
+  };
+
+  const criarProdutoSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setErroProduto('');
+    setSucessoProduto('');
+    setSalvandoProduto(true);
+
+    try {
+      const features = featuresInput.split('\n').map(f => f.trim()).filter(Boolean);
+      const res = await fetch('/api/admin/products', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          name: nome,
+          slug,
+          category: categoria,
+          description,
+          features,
+          images: [imageUrl || '/images/products/substrato-rico.jpg'],
+          variants: variantes.map(v => ({
+            size: v.size,
+            price: Number(v.price),
+            originalPrice: Number(v.originalPrice),
+            stock: Number(v.stock),
+            weight: Number(v.weight),
+            dimensions: { height: Number(v.height), width: Number(v.width), length: Number(v.length) }
+          }))
+        })
+      });
+
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || 'Erro ao cadastrar produto.');
+
+      setSucessoProduto('✅ Produto cadastrado com sucesso!');
+      setNome('');
+      setSlug('');
+      setDescription('');
+      setFeaturesInput('');
+      setImageUrl('');
+    } catch (err: any) {
+      setErroProduto(err.message || 'Erro de conexão ao salvar produto.');
+    } finally {
+      setSalvandoProduto(false);
     }
   };
 
@@ -124,90 +216,369 @@ export default function AdminPage() {
         </div>
       </header>
 
-      <main style={{ maxWidth: 1100, margin: '0 auto', padding: '28px 20px 80px' }}>
-        <h1 style={{ fontSize: 22, fontWeight: 900, color: '#111827', margin: '0 0 4px' }}>Pedidos da Loja</h1>
-        <p style={{ fontSize: 13, color: '#6b7280', margin: '0 0 20px' }}>
-          {orders.length} pedido{orders.length !== 1 ? 's' : ''} no total
-        </p>
+      {/* Navegação por Abas */}
+      <div style={{ background: 'white', borderBottom: '1px solid #e7e2d6', padding: '0 20px' }}>
+        <div style={{ maxWidth: 1100, margin: '0 auto', display: 'flex', gap: 20 }}>
+          <button
+            onClick={() => setAbaAtiva('pedidos')}
+            style={{
+              display: 'flex',
+              alignItems: 'center',
+              gap: 8,
+              padding: '14px 4px',
+              border: 'none',
+              borderBottom: abaAtiva === 'pedidos' ? '3px solid #15803d' : '3px solid transparent',
+              background: 'transparent',
+              color: abaAtiva === 'pedidos' ? '#15803d' : '#6b7280',
+              fontWeight: 800,
+              fontSize: 14,
+              cursor: 'pointer'
+            }}
+          >
+            <ListOrdered size={16} /> Gestão de Pedidos ({orders.length})
+          </button>
+          <button
+            onClick={() => setAbaAtiva('novo-produto')}
+            style={{
+              display: 'flex',
+              alignItems: 'center',
+              gap: 8,
+              padding: '14px 4px',
+              border: 'none',
+              borderBottom: abaAtiva === 'novo-produto' ? '3px solid #15803d' : '3px solid transparent',
+              background: 'transparent',
+              color: abaAtiva === 'novo-produto' ? '#15803d' : '#6b7280',
+              fontWeight: 800,
+              fontSize: 14,
+              cursor: 'pointer'
+            }}
+          >
+            <Plus size={16} /> Cadastrar Novo Produto
+          </button>
+        </div>
+      </div>
 
-        {erro && (
-          <div style={{ background: '#fee2e2', color: '#b91c1c', padding: '10px 14px', borderRadius: 8, fontSize: 13, fontWeight: 600, marginBottom: 16 }}>
-            {erro}
-          </div>
+      <main style={{ maxWidth: 1100, margin: '0 auto', padding: '28px 20px 80px' }}>
+        
+        {/* CONTEÚDO DA ABA 1: PEDIDOS */}
+        {abaAtiva === 'pedidos' && (
+          <>
+            <h1 style={{ fontSize: 22, fontWeight: 900, color: '#111827', margin: '0 0 4px' }}>Pedidos da Loja</h1>
+            <p style={{ fontSize: 13, color: '#6b7280', margin: '0 0 20px' }}>
+              {orders.length} pedido{orders.length !== 1 ? 's' : ''} no total
+            </p>
+
+            {erro && (
+              <div style={{ background: '#fee2e2', color: '#b91c1c', padding: '10px 14px', borderRadius: 8, fontSize: 13, fontWeight: 600, marginBottom: 16 }}>
+                {erro}
+              </div>
+            )}
+
+            {carregando ? (
+              <div style={{ textAlign: 'center', padding: 60 }}>
+                <Loader2 size={32} className="animate-spin" color="#15803d" style={{ margin: '0 auto' }} />
+              </div>
+            ) : orders.length === 0 ? (
+              <div style={{ background: 'white', borderRadius: 14, padding: '50px 20px', textAlign: 'center', border: '1px solid #e7e2d6' }}>
+                <Package size={40} color="#9ca3af" style={{ margin: '0 auto 10px' }} />
+                <p style={{ fontSize: 14, color: '#6b7280' }}>Nenhum pedido ainda. Faça um pedido de teste na loja.</p>
+              </div>
+            ) : (
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
+                {orders.map(order => {
+                  const cor = STATUS_CORES[order.status] || STATUS_CORES.Pendente;
+                  return (
+                    <div key={order.id} style={{ background: 'white', borderRadius: 14, border: '1px solid #e7e2d6', padding: 18 }}>
+                      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', flexWrap: 'wrap', gap: 10, marginBottom: 12 }}>
+                        <div>
+                          <span style={{ fontSize: 15, fontWeight: 900, color: '#111827' }}>
+                            Pedido {order.orderNumber}
+                          </span>
+                          <p style={{ fontSize: 12, color: '#6b7280', margin: '2px 0 0' }}>
+                            {new Date(order.createdAt).toLocaleString('pt-BR')} · {order.cliente.nome} ({order.cliente.email})
+                            {order.endereco?.cep && ` · CEP ${order.endereco.cep}`}
+                          </p>
+                        </div>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                          <span style={{ background: cor.bg, color: cor.cor, fontSize: 11, fontWeight: 900, padding: '4px 10px', borderRadius: 999 }}>
+                            {order.status}
+                          </span>
+                          <select
+                            value={order.status}
+                            disabled={salvandoId === order.id}
+                            onChange={e => mudarStatus(order.id, e.target.value)}
+                            style={{ padding: '6px 8px', borderRadius: 8, border: '1px solid #d1d5db', fontSize: 12, fontWeight: 700, cursor: 'pointer', background: 'white' }}
+                          >
+                            {STATUS_OPCOES.map(s => (
+                              <option key={s} value={s}>{s}</option>
+                            ))}
+                          </select>
+                          {salvandoId === order.id && <Loader2 size={14} className="animate-spin" color="#15803d" />}
+                        </div>
+                      </div>
+
+                      <div style={{ background: '#f9fafb', borderRadius: 10, padding: '10px 14px', marginBottom: 12 }}>
+                        {order.items.map((it, idx) => (
+                          <div key={`${order.id}-item-${idx}`} style={{ display: 'flex', justifyContent: 'space-between', fontSize: 12.5, color: '#374151', padding: '3px 0' }}>
+                            <span>
+                              {it.quantity}x {it.nome}{it.variacao ? ` (${it.variacao})` : ''}
+                            </span>
+                            <span style={{ fontWeight: 700 }}>{fmt(it.preco * it.quantity)}</span>
+                          </div>
+                        ))}
+                      </div>
+
+                      <div style={{ display: 'flex', gap: 18, flexWrap: 'wrap', fontSize: 12.5, color: '#4b5563' }}>
+                        <span>Subtotal: <strong>{fmt(order.subtotal)}</strong></span>
+                        {order.desconto > 0 && (
+                          <span style={{ color: '#15803d' }}>
+                            Cupom {order.cupom}: <strong>- {fmt(order.desconto)}</strong>
+                          </span>
+                        )}
+                        <span>Frete: <strong>{fmt(order.frete)}</strong></span>
+                        <span style={{ color: '#111827', fontSize: 13.5 }}>
+                          Total: <strong>{fmt(order.total)}</strong>
+                        </span>
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            )}
+          </>
         )}
 
-        {carregando ? (
-          <div style={{ textAlign: 'center', padding: 60 }}>
-            <Loader2 size={32} className="animate-spin" color="#15803d" style={{ margin: '0 auto' }} />
-          </div>
-        ) : orders.length === 0 ? (
-          <div style={{ background: 'white', borderRadius: 14, padding: '50px 20px', textAlign: 'center', border: '1px solid #e7e2d6' }}>
-            <Package size={40} color="#9ca3af" style={{ margin: '0 auto 10px' }} />
-            <p style={{ fontSize: 14, color: '#6b7280' }}>Nenhum pedido ainda. Faça um pedido de teste na loja.</p>
-          </div>
-        ) : (
-          <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
-            {orders.map(order => {
-              const cor = STATUS_CORES[order.status] || STATUS_CORES.Pendente;
-              return (
-                <div key={order.id} style={{ background: 'white', borderRadius: 14, border: '1px solid #e7e2d6', padding: 18 }}>
-                  {/* Cabeçalho do pedido */}
-                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', flexWrap: 'wrap', gap: 10, marginBottom: 12 }}>
-                    <div>
-                      <span style={{ fontSize: 15, fontWeight: 900, color: '#111827' }}>
-                        Pedido {order.orderNumber}
-                      </span>
-                      <p style={{ fontSize: 12, color: '#6b7280', margin: '2px 0 0' }}>
-                        {new Date(order.createdAt).toLocaleString('pt-BR')} · {order.cliente.nome} ({order.cliente.email})
-                        {order.endereco?.cep && ` · CEP ${order.endereco.cep}`}
-                      </p>
-                    </div>
-                    <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                      <span style={{ background: cor.bg, color: cor.cor, fontSize: 11, fontWeight: 900, padding: '4px 10px', borderRadius: 999 }}>
-                        {order.status}
-                      </span>
-                      <select
-                        value={order.status}
-                        disabled={salvandoId === order.id}
-                        onChange={e => mudarStatus(order.id, e.target.value)}
-                        style={{ padding: '6px 8px', borderRadius: 8, border: '1px solid #d1d5db', fontSize: 12, fontWeight: 700, cursor: 'pointer', background: 'white' }}
-                      >
-                        {STATUS_OPCOES.map(s => (
-                          <option key={s} value={s}>{s}</option>
-                        ))}
-                      </select>
-                      {salvandoId === order.id && <Loader2 size={14} className="animate-spin" color="#15803d" />}
-                    </div>
-                  </div>
+        {/* CONTEÚDO DA ABA 2: CADASTRAR PRODUTO */}
+        {abaAtiva === 'novo-produto' && (
+          <div style={{ background: 'white', borderRadius: 14, border: '1px solid #e7e2d6', padding: 24, maxWidth: 800, margin: '0 auto' }}>
+            <h1 style={{ fontSize: 20, fontWeight: 900, color: '#111827', margin: '0 0 4px' }}>Cadastrar Novo Produto</h1>
+            <p style={{ fontSize: 13, color: '#6b7280', margin: '0 0 20px' }}>
+              Preencha os detalhes e variações de peso/tamanho para integrar ao catálogo e ao cálculo de frete.
+            </p>
 
-                  {/* Itens */}
-                  <div style={{ background: '#f9fafb', borderRadius: 10, padding: '10px 14px', marginBottom: 12 }}>
-                    {order.items.map((it, idx) => (
-                      <div key={`${order.id}-item-${idx}`} style={{ display: 'flex', justifyContent: 'space-between', fontSize: 12.5, color: '#374151', padding: '3px 0' }}>
-                        <span>
-                          {it.quantity}x {it.nome}{it.variacao ? ` (${it.variacao})` : ''}
-                        </span>
-                        <span style={{ fontWeight: 700 }}>{fmt(it.preco * it.quantity)}</span>
-                      </div>
-                    ))}
-                  </div>
+            {sucessoProduto && (
+              <div style={{ background: '#dcfce7', color: '#166534', padding: '12px 16px', borderRadius: 8, fontSize: 13, fontWeight: 700, marginBottom: 16, display: 'flex', alignItems: 'center', gap: 8 }}>
+                <CheckCircle2 size={16} /> {sucessoProduto}
+              </div>
+            )}
 
-                  {/* Totais */}
-                  <div style={{ display: 'flex', gap: 18, flexWrap: 'wrap', fontSize: 12.5, color: '#4b5563' }}>
-                    <span>Subtotal: <strong>{fmt(order.subtotal)}</strong></span>
-                    {order.desconto > 0 && (
-                      <span style={{ color: '#15803d' }}>
-                        Cupom {order.cupom}: <strong>- {fmt(order.desconto)}</strong>
-                      </span>
-                    )}
-                    <span>Frete: <strong>{fmt(order.frete)}</strong></span>
-                    <span style={{ color: '#111827', fontSize: 13.5 }}>
-                      Total: <strong>{fmt(order.total)}</strong>
-                    </span>
-                  </div>
+            {erroProduto && (
+              <div style={{ background: '#fee2e2', color: '#b91c1c', padding: '12px 16px', borderRadius: 8, fontSize: 13, fontWeight: 700, marginBottom: 16, display: 'flex', alignItems: 'center', gap: 8 }}>
+                <AlertCircle size={16} /> {erroProduto}
+              </div>
+            )}
+
+            <form onSubmit={criarProdutoSubmit} style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 14 }}>
+                <div>
+                  <label style={{ display: 'block', fontSize: 12, fontWeight: 800, color: '#374151', marginBottom: 6 }}>Nome do Produto</label>
+                  <input
+                    type="text"
+                    required
+                    placeholder="Ex: Chips de Coco Lavado Orquídeas"
+                    value={nome}
+                    onChange={e => handleNomeChange(e.target.value)}
+                    style={{ width: '100%', padding: '10px 12px', borderRadius: 8, border: '1px solid #d1d5db', fontSize: 13 }}
+                  />
                 </div>
-              );
-            })}
+
+                <div>
+                  <label style={{ display: 'block', fontSize: 12, fontWeight: 800, color: '#374151', marginBottom: 6 }}>Slug (URL Amigável)</label>
+                  <input
+                    type="text"
+                    required
+                    placeholder="chips-de-coco-lavado-orquideas"
+                    value={slug}
+                    onChange={e => setSlug(e.target.value)}
+                    style={{ width: '100%', padding: '10px 12px', borderRadius: 8, border: '1px solid #d1d5db', fontSize: 13, background: '#f9fafb' }}
+                  />
+                </div>
+              </div>
+
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 14 }}>
+                <div>
+                  <label style={{ display: 'block', fontSize: 12, fontWeight: 800, color: '#374151', marginBottom: 6 }}>Categoria Base</label>
+                  <select
+                    value={categoria}
+                    onChange={e => setCategoria(e.target.value)}
+                    style={{ width: '100%', padding: '10px 12px', borderRadius: 8, border: '1px solid #d1d5db', fontSize: 13, background: 'white' }}
+                  >
+                    <option value="substratos">Substratos</option>
+                    <option value="condicionadores">Condicionadores & Aeração</option>
+                    <option value="fertilizantes">Fertilizantes / Nutrição Líquida</option>
+                    <option value="adubos">Adubos Orgânicos</option>
+                  </select>
+                </div>
+
+                <div>
+                  <label style={{ display: 'block', fontSize: 12, fontWeight: 800, color: '#374151', marginBottom: 6 }}>URL da Imagem</label>
+                  <input
+                    type="text"
+                    placeholder="/images/products/chips-coco.jpg"
+                    value={imageUrl}
+                    onChange={e => setImageUrl(e.target.value)}
+                    style={{ width: '100%', padding: '10px 12px', borderRadius: 8, border: '1px solid #d1d5db', fontSize: 13 }}
+                  />
+                </div>
+              </div>
+
+              <div>
+                <label style={{ display: 'block', fontSize: 12, fontWeight: 800, color: '#374151', marginBottom: 6 }}>Descrição Completa</label>
+                <textarea
+                  rows={3}
+                  required
+                  placeholder="Descreva a composição, benefícios e modo de uso do produto..."
+                  value={description}
+                  onChange={e => setDescription(e.target.value)}
+                  style={{ width: '100%', padding: '10px 12px', borderRadius: 8, border: '1px solid #d1d5db', fontSize: 13, resize: 'vertical' }}
+                />
+              </div>
+
+              <div>
+                <label style={{ display: 'block', fontSize: 12, fontWeight: 800, color: '#374151', marginBottom: 6 }}>Características (1 por linha)</label>
+                <textarea
+                  rows={3}
+                  placeholder="Baixa condutividade elétrica (EC)&#10;PH estável entre 5.8 e 6.5&#10;Retenção uniforme de umidade"
+                  value={featuresInput}
+                  onChange={e => setFeaturesInput(e.target.value)}
+                  style={{ width: '100%', padding: '10px 12px', borderRadius: 8, border: '1px solid #d1d5db', fontSize: 13, resize: 'vertical' }}
+                />
+              </div>
+
+              {/* VARIAÇÕES / MEDIDAS MELHOR ENVIO */}
+              <div style={{ marginTop: 10, background: '#f9fafb', padding: 16, borderRadius: 10, border: '1px solid #e5e7eb' }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 }}>
+                  <h3 style={{ fontSize: 14, fontWeight: 900, color: '#111827', margin: 0 }}>Variações de Tamanho & Frete</h3>
+                  <button
+                    type="button"
+                    onClick={adicionarVariante}
+                    style={{ background: '#15803d', color: 'white', border: 'none', borderRadius: 6, padding: '6px 12px', fontSize: 12, fontWeight: 800, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 4 }}
+                  >
+                    <Plus size={14} /> Add Variação
+                  </button>
+                </div>
+
+                {variantes.map((v, idx) => (
+                  <div key={idx} style={{ background: 'white', padding: 12, borderRadius: 8, border: '1px solid #d1d5db', marginBottom: 10 }}>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
+                      <span style={{ fontSize: 12, fontWeight: 900, color: '#15803d' }}>Variação #{idx + 1}</span>
+                      {variantes.length > 1 && (
+                        <button
+                          type="button"
+                          onClick={() => removerVariante(idx)}
+                          style={{ background: '#fee2e2', color: '#b91c1c', border: 'none', borderRadius: 4, padding: '2px 8px', fontSize: 11, fontWeight: 800, cursor: 'pointer' }}
+                        >
+                          Remover
+                        </button>
+                      )}
+                    </div>
+
+                    <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr 1fr', gap: 10, marginBottom: 8 }}>
+                      <div>
+                        <span style={{ fontSize: 11, color: '#6b7280', fontWeight: 700 }}>Tamanho/Rótulo</span>
+                        <input
+                          type="text"
+                          value={v.size}
+                          onChange={e => atualizarVariante(idx, 'size', e.target.value)}
+                          style={{ width: '100%', padding: 6, borderRadius: 6, border: '1px solid #d1d5db', fontSize: 12 }}
+                        />
+                      </div>
+                      <div>
+                        <span style={{ fontSize: 11, color: '#6b7280', fontWeight: 700 }}>Preço (R$)</span>
+                        <input
+                          type="number"
+                          step="0.01"
+                          value={v.price}
+                          onChange={e => atualizarVariante(idx, 'price', e.target.value)}
+                          style={{ width: '100%', padding: 6, borderRadius: 6, border: '1px solid #d1d5db', fontSize: 12 }}
+                        />
+                      </div>
+                      <div>
+                        <span style={{ fontSize: 11, color: '#6b7280', fontWeight: 700 }}>Preço De (R$)</span>
+                        <input
+                          type="number"
+                          step="0.01"
+                          value={v.originalPrice}
+                          onChange={e => atualizarVariante(idx, 'originalPrice', e.target.value)}
+                          style={{ width: '100%', padding: 6, borderRadius: 6, border: '1px solid #d1d5db', fontSize: 12 }}
+                        />
+                      </div>
+                      <div>
+                        <span style={{ fontSize: 11, color: '#6b7280', fontWeight: 700 }}>Estoque</span>
+                        <input
+                          type="number"
+                          value={v.stock}
+                          onChange={e => atualizarVariante(idx, 'stock', e.target.value)}
+                          style={{ width: '100%', padding: 6, borderRadius: 6, border: '1px solid #d1d5db', fontSize: 12 }}
+                        />
+                      </div>
+                    </div>
+
+                    <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr 1fr', gap: 10 }}>
+                      <div>
+                        <span style={{ fontSize: 11, color: '#6b7280', fontWeight: 700 }}>Peso (gramas)</span>
+                        <input
+                          type="number"
+                          value={v.weight}
+                          onChange={e => atualizarVariante(idx, 'weight', e.target.value)}
+                          style={{ width: '100%', padding: 6, borderRadius: 6, border: '1px solid #d1d5db', fontSize: 12 }}
+                        />
+                      </div>
+                      <div>
+                        <span style={{ fontSize: 11, color: '#6b7280', fontWeight: 700 }}>Alt (cm)</span>
+                        <input
+                          type="number"
+                          value={v.height}
+                          onChange={e => atualizarVariante(idx, 'height', e.target.value)}
+                          style={{ width: '100%', padding: 6, borderRadius: 6, border: '1px solid #d1d5db', fontSize: 12 }}
+                        />
+                      </div>
+                      <div>
+                        <span style={{ fontSize: 11, color: '#6b7280', fontWeight: 700 }}>Larg (cm)</span>
+                        <input
+                          type="number"
+                          value={v.width}
+                          onChange={e => atualizarVariante(idx, 'width', e.target.value)}
+                          style={{ width: '100%', padding: 6, borderRadius: 6, border: '1px solid #d1d5db', fontSize: 12 }}
+                        />
+                      </div>
+                      <div>
+                        <span style={{ fontSize: 11, color: '#6b7280', fontWeight: 700 }}>Comp (cm)</span>
+                        <input
+                          type="number"
+                          value={v.length}
+                          onChange={e => atualizarVariante(idx, 'length', e.target.value)}
+                          style={{ width: '100%', padding: 6, borderRadius: 6, border: '1px solid #d1d5db', fontSize: 12 }}
+                        />
+                      </div>
+                    </div>
+                  </div>
+                ))}
+              </div>
+
+              <button
+                type="submit"
+                disabled={salvandoProduto}
+                style={{
+                  background: '#15803d',
+                  color: 'white',
+                  border: 'none',
+                  borderRadius: 10,
+                  padding: '14px',
+                  fontSize: 14,
+                  fontWeight: 800,
+                  cursor: 'pointer',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  gap: 8,
+                  marginTop: 10
+                }}
+              >
+                {salvandoProduto ? <Loader2 size={16} className="animate-spin" /> : <Plus size={16} />}
+                {salvandoProduto ? 'Cadastrando...' : 'Salvar Produto no Catálogo'}
+              </button>
+            </form>
           </div>
         )}
       </main>
