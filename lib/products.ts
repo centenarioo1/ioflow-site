@@ -203,7 +203,7 @@ const catalogoBase: ProductBase[] = [
     features: ['Rico em ácidos húmicos e fúlvicos', 'Melhora capacidade de retenção de água', 'Totalmente atóxico'],
     images: ['/images/products/humus-minhoca.jpg'],
     variants: [
-      { id: '199187589658', size: '2KG', price: 19.50, originalPrice: 22.50, stock: 100, weight: 2000, dimensions: { height: 8, width: 30, length: 20 } },
+      //{ id: '199187589658', size: '2KG', price: 19.50, originalPrice: 22.50, stock: 100, weight: 2000, dimensions: { height: 8, width: 30, length: 20 } }, // Removido do Supabase
       { id: '238802856194', size: '5KG', price: 32.50, originalPrice: 36.90, stock: 100, weight: 5000, dimensions: { height: 8, width: 35, length: 25 } },
       { id: '229439358068', size: '10KG', price: 45.50, originalPrice: 51.90, stock: 100, weight: 10000, dimensions: { height: 12, width: 40, length: 30 } },
       { id: '179414529814', size: '20KG', price: 60.90, originalPrice: 69.50, stock: 100, weight: 20000, dimensions: { height: 15, width: 45, length: 35 } },
@@ -232,7 +232,7 @@ const catalogoBase: ProductBase[] = [
     images: ['/images/products/bio-start.jpg'],
     variants: [
       //{ id: '239439356486', size: '250ml', price: 48.90, originalPrice: 55.70, stock: 37, weight: 400, dimensions: { height: 8, width: 5, length: 5 } },
-      { id: '239439356488', size: '1L', price: 68.50, originalPrice: 66.50, stock: 50, weight: 1000, dimensions: { height: 15, width: 5, length: 8 } }
+      { id: '239439356487', size: '1L', price: 68.50, originalPrice: 66.50, stock: 50, weight: 1000, dimensions: { height: 15, width: 5, length: 8 } }
     ],
   },
   {

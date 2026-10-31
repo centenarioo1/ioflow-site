@@ -31,10 +31,7 @@ import WhatsAppButton from '@/components/WhatsAppButton';
 // Importe o tipo Product junto com a lista de produtos
 import { products as produtos, type Product } from '@/lib/products';
 
-// Converta os produtos para o tipo correto no filtro
-const nutrientes = (produtos as Product[]).filter((p) => p.categoria === 'nutriente');
-const solos = (produtos as Product[]).filter((p) => (p.categoria as string) === 'solo' || p.categoria === 'substrato');
-const emendas = (produtos as Product[]).filter((p) => p.categoria === 'emenda');
+// Os filtros foram movidos para dentro do HomePage para funcionarem dinamicamente com os dados do Supabase
 
 const faqItems = [
   { 
@@ -321,9 +318,85 @@ function ProdutoCard({ p }: { p: typeof produtos[number] }) {
 }
 
 export default function HomePage() {
+  const [produtosLista, setProdutosLista] = useState<Product[]>(produtos as Product[]);
   const [faqAberto, setFaqAberto] = useState<number | null>(null);
   const [cultivoAtivo, setCultivoAtivo] = useState<'solo' | 'hidroponia'>('solo');
   const [imagemModal, setImagemModal] = useState<string | null>(null);
+
+  // 🟢 BUSCA DINÂMICA DIRETO DO SUPABASE
+  // Garante que exclusões/edições no admin reflitam em tempo real na Home sem precisar de novo deploy na Vercel
+  useEffect(() => {
+    async function carregarProdutosDoSupabase() {
+      try {
+        const res = await fetch('/api/admin/products');
+        const data = await res.json();
+        if (data.ok && Array.isArray(data.products) && data.products.length > 0) {
+          const INFO_CATEGORIA: Record<string, { categoria: 'substrato' | 'nutriente' | 'emenda'; fase: string; acento: string }> = {
+            substratos:      { categoria: 'substrato', fase: 'Substrato',           acento: '#22c55e' },
+            condicionadores: { categoria: 'substrato', fase: 'Aeração & Drenagem',  acento: '#0ea5e9' },
+            fertilizantes:   { categoria: 'nutriente', fase: 'Nutrição Líquida',    acento: '#d4a843' },
+            adubos:          { categoria: 'emenda',    fase: 'Adubo Orgânico',      acento: '#b45309' },
+          };
+
+          const normalizados: Product[] = data.products.map((p: any) => {
+            const info = INFO_CATEGORIA[p.category] || { categoria: 'substrato', fase: 'Produto', acento: '#22c55e' };
+            const disponiveis = p.variants?.filter((v: any) => v.stock > 0) || [];
+            const base = disponiveis.length > 0 ? disponiveis : (p.variants || []);
+            const maisBarata = base.length > 0
+              ? base.reduce((menor: any, v: any) => (v.price < menor.price ? v : menor), base[0])
+              : { price: 0, originalPrice: 0 };
+            const estoque = (p.variants || []).reduce((acc: number, v: any) => acc + v.stock, 0);
+
+            return {
+              id: p.id,
+              name: p.name,
+              nome: p.name,
+              slug: p.slug,
+              category: p.category,
+              categoria: info.categoria,
+              subtitulo: (p.variants || []).map((v: any) => v.size).join(' · '),
+              description: p.description,
+              descricao: p.description,
+              descricaoCurta: p.description,
+              features: p.features || [],
+              tags: [...(p.features || []), info.fase, p.category],
+              images: p.images || [],
+              imagens: p.images || [],
+              variants: (p.variants || []).map((v: any) => ({
+                id: v.id,
+                size: v.size,
+                price: Number(v.price),
+                originalPrice: Number(v.originalPrice),
+                stock: Number(v.stock),
+                weight: Number(v.weight),
+                dimensions: {
+                  height: Number(v.height || v.dimensions?.height || 10),
+                  width: Number(v.width || v.dimensions?.width || 20),
+                  length: Number(v.length || v.dimensions?.length || 30),
+                },
+              })),
+              preco: Number(maisBarata.price),
+              precoOriginal: Number(maisBarata.originalPrice),
+              fase: info.fase,
+              acento: info.acento,
+              estoque,
+              emEstoque: estoque > 0,
+            };
+          });
+
+          setProdutosLista(normalizados);
+        }
+      } catch (err) {
+        console.error('Erro ao carregar produtos do Supabase:', err);
+      }
+    }
+
+    carregarProdutosDoSupabase();
+  }, []);
+
+  const nutrientes = produtosLista.filter((p) => p.categoria === 'nutriente');
+  const solos = produtosLista.filter((p) => (p.categoria as string) === 'solo' || p.categoria === 'substrato');
+  const emendas = produtosLista.filter((p) => p.categoria === 'emenda');
 
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
