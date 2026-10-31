@@ -100,14 +100,16 @@ const catalogoBase: ProductBase[] = [
   },
   {
     id: '58206334194',
-    slug: 'substrato-sphagnotec-turfa-perlita-cultivo-indoor',
-    name: 'Substrato Sphagnotec: Turfa e Perlita Cultivo Indoor BIOFLOW',
-    category: 'substratos',
-    description: 'Substrato premium inerte à base de Turfa de Sphagnum e Perlita expandida para máximo controle nutricional.',
-    features: ['Substrato inerte de alta pureza', 'Total controle de fertirrigação', 'Volume para grandes cultivos'],
-    images: ['/images/products/sphagnotec.jpg'],
+    slug: 'chips-de-coco-lavado-orquideas-folhagens',
+    name: 'Chips de Coco Lavado Orquídeas e Folhagens',
+    category: 'condicionadores',
+    description: 'Chips de casca de coco lavados com baixa condutividade elétrica, ideais para promover excelente aeração, drenagem e retenção uniforme de umidade no cultivo de orquídeas, bromélias, antúrios e folhagens.',
+    features: ['Baixa condutividade elétrica (EC)', 'PH estável entre 5.8 e 6.5', 'Retenção uniforme de umidade'],
+    images: ['/images/products/chips-coco.jpg'],
     variants: [
-      { id: '179725725743', size: '50L', price: 85.50, originalPrice: 97.50, stock: 17, weight: 4000, dimensions: { height: 30, width: 30, length: 70 } },
+      { id: '299186998969', size: '5L', price: 26.90, originalPrice: 30.70, stock: 117, weight: 1000, dimensions: { height: 8, width: 25, length: 35 } },
+      { id: '289619365173', size: '10L', price: 33.50, originalPrice: 38.50, stock: 100, weight: 2000, dimensions: { height: 12, width: 30, length: 40 } },
+      { id: '289619365174', size: '20L', price: 61.90, originalPrice: 70.50, stock: 117, weight: 4000, dimensions: { height: 15, width: 35, length: 45 } },
     ],
   },
   {

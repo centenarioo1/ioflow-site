@@ -232,7 +232,7 @@ const catalogoBase: ProductBase[] = [
     images: ['/images/products/bio-start.jpg'],
     variants: [
       //{ id: '239439356486', size: '250ml', price: 48.90, originalPrice: 55.70, stock: 37, weight: 400, dimensions: { height: 8, width: 5, length: 5 } },
-      { id: '239439356487', size: '1L', price: 68.50, originalPrice: 66.50, stock: 50, weight: 1000, dimensions: { height: 15, width: 5, length: 8 } }
+      { id: '239439356488', size: '1L', price: 68.50, originalPrice: 66.50, stock: 50, weight: 1000, dimensions: { height: 15, width: 5, length: 8 } }
     ],
   },
   {

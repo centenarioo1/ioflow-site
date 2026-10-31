@@ -1,93 +1,139 @@
 // app/api/admin/products/route.ts
 import { NextResponse } from 'next/server';
-import products, { Product } from '@/lib/products';
+import { prisma } from '@/lib/prisma';
 
 export const dynamic = 'force-dynamic';
 
-// GET: Retorna a lista de produtos para o painel
+// GET: Lista todos os produtos direto do Supabase
 export async function GET() {
   try {
-    return NextResponse.json({ ok: true, products });
-  } catch (error) {
-    return NextResponse.json({ error: 'Erro ao buscar produtos' }, { status: 500 });
+    const dbProducts = await prisma.product.findMany({
+      include: { variants: true },
+      orderBy: { createdAt: 'desc' },
+    });
+
+    const formattedProducts = dbProducts.map((p) => ({
+      id: p.id,
+      name: p.name,
+      slug: p.slug,
+      category: p.category,
+      description: p.description,
+      features: p.features,
+      images: p.images,
+      variants: p.variants.map((v) => ({
+        id: v.id,
+        size: v.size,
+        price: v.price,
+        originalPrice: v.originalPrice,
+        stock: v.stock,
+        weight: v.weight,
+        dimensions: { height: v.height, width: v.width, length: v.length },
+      })),
+    }));
+
+    return NextResponse.json({ ok: true, products: formattedProducts });
+  } catch (error: any) {
+    console.error('Erro ao buscar produtos:', error);
+    return NextResponse.json({ error: 'Erro de conexão com o banco de dados.' }, { status: 500 });
   }
 }
 
-// POST: Cadastra um novo produto
+// POST: Cadastra um novo produto no Supabase
 export async function POST(request: Request) {
   try {
     const body = await request.json();
     const { name, slug, category, description, features, images, variants } = body;
 
     if (!name || !slug || !variants || variants.length === 0) {
-      return NextResponse.json({ error: 'Preencha os campos obrigatórios' }, { status: 400 });
+      return NextResponse.json({ error: 'Preencha todos os campos obrigatórios.' }, { status: 400 });
     }
 
-    const newProduct: Product = {
-      id: String(Date.now()),
-      name,
-      slug,
-      category,
-      description,
-      features: features || [],
-      images: images || ['/images/products/substrato-rico.jpg'],
-      variants: variants.map((v: any, idx: number) => ({
-        id: `${Date.now()}-${idx}`,
-        size: v.size,
-        price: Number(v.price),
-        originalPrice: Number(v.originalPrice),
-        stock: Number(v.stock),
-        weight: Number(v.weight),
-        dimensions: v.dimensions || { height: 10, width: 20, length: 30 },
-      })),
-      nome: name,
-      categoria: category === 'fertilizantes' ? 'nutriente' : category === 'adubos' ? 'emenda' : 'substrato',
-      subtitulo: variants.map((v: any) => v.size).join(' · '),
-      descricao: description,
-      descricaoCurta: description,
-      tags: [name, category],
-      preco: Number(variants[0].price),
-      precoOriginal: Number(variants[0].originalPrice),
-      imagens: images || ['/images/products/substrato-rico.jpg'],
-      fase: category === 'fertilizantes' ? 'Nutrição Líquida' : 'Substrato',
-      acento: '#15803d',
-      estoque: variants.reduce((acc: number, v: any) => acc + Number(v.stock), 0),
-      emEstoque: true,
-    };
+    const createdProduct = await prisma.product.create({
+      data: {
+        name,
+        slug,
+        category: category || 'substratos',
+        description: description || '',
+        features: features || [],
+        images: images || ['/images/products/substrato-rico.jpg'],
+        variants: {
+          create: variants.map((v: any) => ({
+            size: v.size,
+            price: Number(v.price),
+            originalPrice: Number(v.originalPrice),
+            stock: Number(v.stock),
+            weight: Number(v.weight),
+            height: Number(v.dimensions?.height || v.height || 10),
+            width: Number(v.dimensions?.width || v.width || 20),
+            length: Number(v.dimensions?.length || v.length || 30),
+          })),
+        },
+      },
+      include: { variants: true },
+    });
 
-    products.unshift(newProduct);
-    return NextResponse.json({ ok: true, product: newProduct });
-  } catch (error) {
-    return NextResponse.json({ error: 'Erro ao criar produto' }, { status: 500 });
+    return NextResponse.json({ ok: true, product: createdProduct });
+  } catch (error: any) {
+    console.error('Erro ao cadastrar produto:', error);
+    return NextResponse.json({ error: error.message || 'Erro ao cadastrar produto no banco.' }, { status: 500 });
   }
 }
 
-// DELETE: Exclui produto ou variação
+// DELETE: Exclui um produto completo ou apenas uma variação
 export async function DELETE(request: Request) {
   try {
     const { productId, variantId } = await request.json();
 
     if (!productId) {
-      return NextResponse.json({ error: 'ID do produto é obrigatório' }, { status: 400 });
+      return NextResponse.json({ error: 'ID do produto é obrigatório.' }, { status: 400 });
     }
 
-    const index = products.findIndex((p) => p.id === productId);
-    if (index === -1) {
-      return NextResponse.json({ error: 'Produto não encontrado' }, { status: 404 });
-    }
-
-    // Se passou variantId, remove apenas a variação
+    // Se informou variantId, deleta apenas a variação específica no Supabase
     if (variantId) {
-      products[index].variants = products[index].variants.filter(
-        (v) => v.id !== variantId && v.size !== variantId
-      );
-      return NextResponse.json({ ok: true, message: 'Variação removida com sucesso' });
+      await prisma.productVariant.delete({
+        where: { id: variantId },
+      });
+      return NextResponse.json({ ok: true, message: 'Variação removida com sucesso do Supabase.' });
     }
 
-    // Se não passou variantId, remove o produto completo
-    products.splice(index, 1);
-    return NextResponse.json({ ok: true, message: 'Produto removido com sucesso' });
-  } catch (error) {
-    return NextResponse.json({ error: 'Erro ao remover produto' }, { status: 500 });
+    // Se informou apenas productId, deleta o produto inteiro (e as variações em cascata)
+    await prisma.product.delete({
+      where: { id: productId },
+    });
+
+    return NextResponse.json({ ok: true, message: 'Produto removido com sucesso do Supabase.' });
+  } catch (error: any) {
+    console.error('Erro ao excluir no Supabase:', error);
+    return NextResponse.json({ error: 'Erro ao excluir item do banco de dados.' }, { status: 500 });
+  }
+}
+
+// PATCH: Adiciona uma nova variação a um produto existente no Supabase
+export async function PATCH(request: Request) {
+  try {
+    const { productId, action, variant } = await request.json();
+
+    if (!productId || action !== 'add_variant' || !variant) {
+      return NextResponse.json({ error: 'Parâmetros inválidos.' }, { status: 400 });
+    }
+
+    const createdVariant = await prisma.productVariant.create({
+      data: {
+        productId,
+        size: variant.size,
+        price: Number(variant.price),
+        originalPrice: Number(variant.originalPrice),
+        stock: Number(variant.stock),
+        weight: Number(variant.weight),
+        height: Number(variant.dimensions?.height || variant.height || 10),
+        width: Number(variant.dimensions?.width || variant.width || 20),
+        length: Number(variant.dimensions?.length || variant.length || 30),
+      },
+    });
+
+    return NextResponse.json({ ok: true, variant: createdVariant });
+  } catch (error: any) {
+    console.error('Erro ao adicionar variação:', error);
+    return NextResponse.json({ error: 'Erro ao adicionar variação no Supabase.' }, { status: 500 });
   }
 }
