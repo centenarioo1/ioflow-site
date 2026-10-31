@@ -361,7 +361,7 @@ export default function AdminPedidosClient({ initialOrders = [] }: { initialOrde
     setSalvandoProduto(true);
 
     try {
-      const features = featuresInput.split('\n').map((f) => f.trim()).filter(Boolean);
+      const features = featuresInput.split(/\r?\n/).map((f) => f.trim()).filter(Boolean);
       const res = await fetch('/api/admin/products', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
