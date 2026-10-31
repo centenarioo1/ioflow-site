@@ -31,10 +31,7 @@ import WhatsAppButton from '@/components/WhatsAppButton';
 // Importe o tipo Product junto com a lista de produtos
 import { products as produtos, type Product } from '@/lib/products';
 
-// Converta os produtos para o tipo correto no filtro
-const nutrientes = (produtos as Product[]).filter((p) => p.categoria === 'nutriente');
-const solos = (produtos as Product[]).filter((p) => (p.categoria as string) === 'solo' || p.categoria === 'substrato');
-const emendas = (produtos as Product[]).filter((p) => p.categoria === 'emenda');
+
 
 const faqItems = [
   { 
@@ -139,15 +136,9 @@ function ProdutoCard({ p }: { p: typeof produtos[number] }) {
   // 🟢 ESTADO PARA CONTROLAR EXPANSÃO DA DESCRIÇÃO
   const [expandido, setExpandido] = useState(false);
 
-  // 🟢 ORDENAÇÃO AUTOMÁTICA DAS VARIAÇÕES PELO PREÇO (MENOR PARA O MAIOR)
-  const variantesOrdenadas = React.useMemo(() => {
-    if (!p.variants) return [];
-    return [...p.variants].sort((a, b) => a.price - b.price);
-  }, [p.variants]);
-
   const [selectedVariant, setSelectedVariant] = useState(() => {
-    const disponiveis = variantesOrdenadas.filter((v) => v.stock > 0);
-    return disponiveis.length > 0 ? disponiveis[0] : variantesOrdenadas[0];
+    const disponiveis = p.variants?.filter((v) => v.stock > 0);
+    return (disponiveis && disponiveis.length > 0) ? disponiveis.at(0) : (p.variants ? p.variants.at(0) : undefined);
   });
 
   const precoAtual = selectedVariant ? selectedVariant.price : p.preco;
@@ -246,10 +237,10 @@ function ProdutoCard({ p }: { p: typeof produtos[number] }) {
         </div>
       </div>
 
-      {variantesOrdenadas && variantesOrdenadas.length > 1 && (
+      {p.variants && p.variants.length > 1 && (
         <div style={{ padding: '0 14px 6px' }}>
           <div style={{ display: 'flex', gap: 4, flexWrap: 'wrap' }}>
-            {variantesOrdenadas.map((v) => {
+            {p.variants.map((v) => {
               const ativo = selectedVariant?.size === v.size;
               const semEstoque = v.stock <= 0;
               return (
@@ -326,8 +317,71 @@ function ProdutoCard({ p }: { p: typeof produtos[number] }) {
   );
 }
 
+
+const INFO_CATEGORIA_MAP: Record<string, { categoria: 'substrato' | 'nutriente' | 'emenda'; fase: string; acento: string }> = {
+  substratos:      { categoria: 'substrato', fase: 'Substrato',           acento: '#22c55e' },
+  condicionadores: { categoria: 'substrato', fase: 'Aeração & Drenagem',  acento: '#0ea5e9' },
+  fertilizantes:   { categoria: 'nutriente', fase: 'Nutrição Líquida',    acento: '#d4a843' },
+  adubos:          { categoria: 'emenda',    fase: 'Adubo Orgânico',      acento: '#b45309' },
+};
+
+function formatarProdutoSupabase(p: any): Product {
+  const info = INFO_CATEGORIA_MAP[p.category] || { categoria: 'substrato', fase: 'Produto', acento: '#22c55e' };
+  const sortedVariants = p.variants ? [...p.variants].sort((a: any, b: any) => Number(a.price) - Number(b.price)) : [];
+  const disponiveis = sortedVariants.filter((v: any) => Number(v.stock) > 0);
+  const base = disponiveis.length > 0 ? disponiveis : sortedVariants;
+  const maisBarata = base.length > 0 ? base[0] : { price: 0, originalPrice: 0 };
+  const estoqueTotal = sortedVariants.reduce((acc: number, v: any) => acc + (Number(v.stock) || 0), 0);
+
+  return {
+    id: p.id,
+    name: p.name,
+    nome: p.name,
+    slug: p.slug,
+    category: p.category,
+    categoria: info.categoria,
+    subtitulo: sortedVariants.map((v: any) => v.size).join(' · '),
+    description: p.description || '',
+    descricao: p.description || '',
+    descricaoCurta: p.description || '',
+    features: p.features || [],
+    tags: [...(p.features || []), info.fase, p.category],
+    images: p.images || [],
+    imagens: p.images || [],
+    variants: sortedVariants,
+    preco: Number(maisBarata.price || 0),
+    precoOriginal: Number(maisBarata.originalPrice || 0),
+    fase: info.fase,
+    acento: info.acento,
+    estoque: estoqueTotal,
+    emEstoque: estoqueTotal > 0,
+  } as Product;
+}
+
 export default function HomePage() {
+  const [listaProdutos, setListaProdutos] = useState<Product[]>(produtos as Product[]);
   const [faqAberto, setFaqAberto] = useState<number | null>(null);
+
+  useEffect(() => {
+    async function carregarProdutosDoSupabase() {
+      try {
+        const res = await fetch('/api/admin/products', { cache: 'no-store' });
+        if (!res.ok) return;
+        const data = await res.json();
+        if (data.ok && Array.isArray(data.products) && data.products.length > 0) {
+          const formatados = data.products.map(formatarProdutoSupabase);
+          setListaProdutos(formatados);
+        }
+      } catch (err) {
+        console.error('Erro ao conectar ao Supabase:', err);
+      }
+    }
+    carregarProdutosDoSupabase();
+  }, []);
+
+  const nutrientes = listaProdutos.filter((p) => p.categoria === 'nutriente');
+  const solos = listaProdutos.filter((p) => (p.categoria as string) === 'solo' || p.categoria === 'substrato');
+  const emendas = listaProdutos.filter((p) => p.categoria === 'emenda');
   const [cultivoAtivo, setCultivoAtivo] = useState<'solo' | 'hidroponia'>('solo');
   const [imagemModal, setImagemModal] = useState<string | null>(null);
 
