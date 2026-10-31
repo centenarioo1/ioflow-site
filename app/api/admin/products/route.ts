@@ -4,7 +4,7 @@ import { prisma } from '@/lib/prisma';
 
 export const dynamic = 'force-dynamic';
 
-// GET: Lista todos os produtos direto do Supabase
+// GET: Lista todos os produtos direto do Supabase (com variações ordenadas por preço)
 export async function GET() {
   try {
     const dbProducts = await prisma.product.findMany({
@@ -12,24 +12,29 @@ export async function GET() {
       orderBy: { createdAt: 'desc' },
     });
 
-    const formattedProducts = dbProducts.map((p) => ({
-      id: p.id,
-      name: p.name,
-      slug: p.slug,
-      category: p.category,
-      description: p.description,
-      features: p.features,
-      images: p.images,
-      variants: p.variants.map((v) => ({
-        id: v.id,
-        size: v.size,
-        price: v.price,
-        originalPrice: v.originalPrice,
-        stock: v.stock,
-        weight: v.weight,
-        dimensions: { height: v.height, width: v.width, length: v.length },
-      })),
-    }));
+    const formattedProducts = dbProducts.map((p) => {
+      // 🟢 Ordena as variações por preço (menor para o maior)
+      const sortedVariants = [...p.variants].sort((a, b) => a.price - b.price);
+
+      return {
+        id: p.id,
+        name: p.name,
+        slug: p.slug,
+        category: p.category,
+        description: p.description,
+        features: p.features,
+        images: p.images,
+        variants: sortedVariants.map((v) => ({
+          id: v.id,
+          size: v.size,
+          price: v.price,
+          originalPrice: v.originalPrice,
+          stock: v.stock,
+          weight: v.weight,
+          dimensions: { height: v.height, width: v.width, length: v.length },
+        })),
+      };
+    });
 
     return NextResponse.json({ ok: true, products: formattedProducts });
   } catch (error: any) {
@@ -72,6 +77,9 @@ export async function POST(request: Request) {
       include: { variants: true },
     });
 
+    // 🟢 Ordena variações por preço ao retornar
+    createdProduct.variants.sort((a, b) => a.price - b.price);
+
     return NextResponse.json({ ok: true, product: createdProduct });
   } catch (error: any) {
     console.error('Erro ao cadastrar produto:', error);
@@ -88,7 +96,6 @@ export async function DELETE(request: Request) {
       return NextResponse.json({ error: 'ID do produto é obrigatório.' }, { status: 400 });
     }
 
-    // Se informou variantId, deleta apenas a variação específica no Supabase
     if (variantId) {
       await prisma.productVariant.delete({
         where: { id: variantId },
@@ -96,7 +103,6 @@ export async function DELETE(request: Request) {
       return NextResponse.json({ ok: true, message: 'Variação removida com sucesso do Supabase.' });
     }
 
-    // Se informou apenas productId, deleta o produto inteiro (e as variações em cascata)
     await prisma.product.delete({
       where: { id: productId },
     });
