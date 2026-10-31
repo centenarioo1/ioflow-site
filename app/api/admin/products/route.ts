@@ -14,7 +14,12 @@ export async function GET() {
 
     const formattedProducts = dbProducts.map((p) => {
       // 🟢 Ordena as variações por preço (menor para o maior)
-      const sortedVariants = [...p.variants].sort((a, b) => a.price - b.price);
+      const sortedVariants = [...p.variants].sort((a, b) => {
+        const wA = Number(a.weight || 0);
+        const wB = Number(b.weight || 0);
+        if (wA > 0 && wB > 0 && wA !== wB) return wA - wB;
+        return a.price - b.price;
+      });
 
       return {
         id: p.id,
@@ -78,7 +83,7 @@ export async function POST(request: Request) {
     });
 
     // 🟢 Ordena variações por preço ao retornar
-    createdProduct.variants.sort((a, b) => a.price - b.price);
+    createdProduct.variants.sort((a, b) => ((Number(a.weight || 0) > 0 && Number(b.weight || 0) > 0 && Number(a.weight) !== Number(b.weight)) ? Number(a.weight) - Number(b.weight) : a.price - b.price));
 
     return NextResponse.json({ ok: true, product: createdProduct });
   } catch (error: any) {

@@ -701,7 +701,7 @@ export default function AdminPage() {
                       {/* Lista de Variações Existentes com Botão de Remover */}
                       <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
                         {p.variants && p.variants.length > 0 ? (
-                          [...p.variants].sort((a, b) => a.price - b.price).map((v, vIdx) => {
+                          [...p.variants].sort((a, b) => ((Number(a.weight || 0) > 0 && Number(b.weight || 0) > 0 && Number(a.weight) !== Number(b.weight)) ? Number(a.weight) - Number(b.weight) : a.price - b.price)).map((v, vIdx) => {
                             const varKey = v.id || `${p.id}-${v.size}-${vIdx}`;
                             const isExcluindo = excluindoId === `${p.id}-${varKey}` || excluindoId === `${p.id}-${v.id}`;
                             return (

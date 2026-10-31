@@ -327,7 +327,14 @@ const INFO_CATEGORIA_MAP: Record<string, { categoria: 'substrato' | 'nutriente' 
 
 function formatarProdutoSupabase(p: any): Product {
   const info = INFO_CATEGORIA_MAP[p.category] || { categoria: 'substrato', fase: 'Produto', acento: '#22c55e' };
-  const sortedVariants = p.variants ? [...p.variants].sort((a: any, b: any) => Number(a.price) - Number(b.price)) : [];
+  const sortedVariants = p.variants
+    ? [...p.variants].sort((a: any, b: any) => {
+        const wA = Number(a.weight || 0);
+        const wB = Number(b.weight || 0);
+        if (wA > 0 && wB > 0 && wA !== wB) return wA - wB;
+        return Number(a.price || 0) - Number(b.price || 0);
+      })
+    : [];
   const disponiveis = sortedVariants.filter((v: any) => Number(v.stock) > 0);
   const base = disponiveis.length > 0 ? disponiveis : sortedVariants;
   const maisBarata = base.length > 0 ? base[0] : { price: 0, originalPrice: 0 };
