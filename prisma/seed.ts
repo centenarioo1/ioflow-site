@@ -1,13 +1,34 @@
+import fs from 'fs';
+import path from 'path';
 import { PrismaClient } from '@prisma/client';
 import { products as catalogoEstatico } from '../lib/products';
+
+['.env', '.env.local'].forEach((file) => {
+  const envPath = path.resolve(process.cwd(), file);
+  if (fs.existsSync(envPath)) {
+    const content = fs.readFileSync(envPath, 'utf-8');
+    content.split('
+').forEach((line) => {
+      const trimmed = line.trim();
+      if (trimmed && !trimmed.startsWith('#') && trimmed.includes('=')) {
+        const [key, ...valParts] = trimmed.split('=');
+        const keyName = key.trim();
+        const val = valParts.join('=').trim().replace(/^["']|["']$/g, '');
+        if (!process.env[keyName]) {
+          process.env[keyName] = val;
+        }
+      }
+    });
+  }
+});
 
 const prisma = new PrismaClient();
 
 async function main() {
-  console.log('🌱 Iniciando sincronização e seed do banco de dados (Prisma v6 / Supabase)...');
+  console.log('🌱 Iniciando sincronização e seed do banco de dados (Supabase)...');
 
   for (const prod of catalogoEstatico) {
-    console.log();
+    console.log(`📦 Processando produto: ${prod.nome} (${prod.id})`);
 
     const produtoDb = await prisma.product.upsert({
       where: { id: prod.id },
@@ -59,7 +80,7 @@ async function main() {
     }
   }
 
-  console.log('✅ Seed finalizado com sucesso! Todos os 17 produtos e minerais cadastrados.');
+  console.log('✅ Seed finalizado com sucesso!');
 }
 
 main()
