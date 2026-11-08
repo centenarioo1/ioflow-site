@@ -97,7 +97,7 @@ function PrintReview({ src, index, autor, tag, depoimento, onImageClick }: { src
             ))}
           </div>
           <p style={{ fontSize: 12, color: 'rgba(255,255,255,0.85)', lineHeight: 1.45, fontStyle: 'italic', margin: 0 }}>
-            "{depoimento}"
+            &quot;{depoimento}&quot;
           </p>
         </div>
         <div style={{ marginTop: 10, borderTop: '1px solid rgba(255,255,255,0.08)', paddingTop: 8, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
