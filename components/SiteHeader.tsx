@@ -188,6 +188,32 @@ export default function SiteHeader() {
                     <div style={{ color: 'rgba(255,255,255,0.5)', fontSize: 10.5 }}>Bio-Humus, Torta, Esterco</div>
                   </div>
                 </Link>
+
+                {/* 🆕 ABA DE INSUMOS MINERAIS (Calcário & Superfosfato) */}
+                <Link 
+                  href="/produtos?cat=mineral" 
+                  className="dropdown-item"
+                  onClick={() => setProdutosHover(false)}
+                  style={{
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: 10,
+                    padding: '9px 12px',
+                    borderRadius: 8,
+                    textDecoration: 'none',
+                    color: '#ffffff',
+                    fontSize: 13,
+                    fontWeight: 600,
+                  }}
+                >
+                  <div style={{ background: 'rgba(168, 85, 247, 0.15)', padding: 6, borderRadius: 6, display: 'flex' }}>
+                    <Sparkles size={16} color="#c084fc" />
+                  </div>
+                  <div>
+                    <div style={{ color: '#fff', fontSize: 13, fontWeight: 700 }}>Insumos Minerais</div>
+                    <div style={{ color: 'rgba(255,255,255,0.5)', fontSize: 10.5 }}>Calcário Calcítico, Superfosfato</div>
+                  </div>
+                </Link>
               </div>
             )}
           </div>
@@ -350,6 +376,9 @@ export default function SiteHeader() {
                 </Link>
                 <Link href="/produtos?cat=emenda" onClick={() => setMenuMobileAberto(false)} style={{ color: 'rgba(255,255,255,0.7)', textDecoration: 'none', fontSize: 13.5 }}>
                   • Adubos Orgânicos
+                </Link>
+                <Link href="/produtos?cat=mineral" onClick={() => setMenuMobileAberto(false)} style={{ color: 'rgba(255,255,255,0.7)', textDecoration: 'none', fontSize: 13.5 }}>
+                  • Insumos Minerais
                 </Link>
               </div>
             )}

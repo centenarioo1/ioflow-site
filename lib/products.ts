@@ -17,7 +17,7 @@ export interface ProductVariant {
   };
 }
 
-export type CategoriaBase = 'substratos' | 'fertilizantes' | 'adubos' | 'condicionadores';
+export type CategoriaBase = 'substratos' | 'fertilizantes' | 'adubos' | 'condicionadores' | 'minerais';
 
 export interface ProductBase {
   id: string;
@@ -35,7 +35,7 @@ export interface ProductBase {
 // ==========================================================
 export interface Product extends ProductBase {
   nome: string;
-  categoria: 'substrato' | 'nutriente' | 'emenda';
+  categoria: 'substrato' | 'nutriente' | 'emenda' | 'mineral';
   subtitulo: string;
   descricao: string;
   descricaoCurta: string;
@@ -49,9 +49,17 @@ export interface Product extends ProductBase {
   emEstoque: boolean;
 }
 
-// ==========================================================
-// CATÁLOGO BRUTO (PRODUTOS OFICIAIS ÚNICOS DA BIOFLOW®)
-// ==========================================================
+const INFO_CATEGORIA: Record<
+  CategoriaBase,
+  { categoria: Product['categoria']; fase: string; acento: string }
+> = {
+  substratos:      { categoria: 'substrato', fase: 'Substrato',           acento: '#22c55e' },
+  condicionadores: { categoria: 'substrato', fase: 'Aeração & Drenagem',  acento: '#0ea5e9' },
+  fertilizantes:   { categoria: 'nutriente', fase: 'Nutrição Líquida',    acento: '#d4a843' },
+  adubos:          { categoria: 'emenda',    fase: 'Adubo Orgânico',      acento: '#b45309' },
+  minerais:        { categoria: 'mineral',   fase: 'Insumo Mineral',      acento: '#a855f7' },
+};
+
 const catalogoBase: ProductBase[] = [
   // ==========================================
   // 1. SUBSTRATOS
@@ -179,7 +187,7 @@ const catalogoBase: ProductBase[] = [
     id: '58222490590',
     slug: 'calcario-calcitico-85-corretivo-solo-nutricao-animal',
     name: 'Calcário Calcítico 85% Corretivo de Solo e Suplemento Animal',
-    category: 'condicionadores',
+    category: 'minerais',
     description: 'Mineral de Carbonato de Cálcio puro (PRNT 85%) com baixo teor de magnésio. Utilizado para elevação rápida do pH do solo e suplementação nutricional de cálcio para poedeiras, bovinos, suínos e ovinos.',
     features: ['PRNT 85% de alta reatividade', 'Alto teor de Cálcio solúvel (Ca)', 'Uso dual: Correção de solo e Nutrição Animal'],
     images: ['/images/products/calcario-calcitico.jpg'],
@@ -229,7 +237,7 @@ const catalogoBase: ProductBase[] = [
     id: '58222500632',
     slug: 'superfosfato-simples-granulado-adubo-ssp',
     name: 'Superfosfato Simples Granulado (SSP 18% P2O5 + 16% Ca + 10% S)',
-    category: 'adubos',
+    category: 'minerais',
     description: 'Fertilizante mineral fosfatado solúvel de alta eficiência. Fornece Fósforo imediato para arranque de raízes e floração, acrescido de Cálcio e Enxofre solúveis.',
     features: ['18% Fósforo (P₂O₅) solúvel', '16% Cálcio e 10% Enxofre integrados', 'Arranque rápido de raízes e flores'],
     images: ['/images/products/superfosfato-simples.jpg'],
@@ -351,3 +359,62 @@ export const getProductById = (id: string): Product | undefined => {
 };
 
 export default getProducts;
+
+function normalizar(p: ProductBase): Product {
+  const info = INFO_CATEGORIA[p.category];
+  
+  // 🟢 Ordena as variações automaticamente do menor para o maior preço
+  const variantesOrdenadas = [...p.variants].sort((a, b) => a.price - b.price);
+  
+  const disponiveis = variantesOrdenadas.filter((v) => v.stock > 0);
+  const base = disponiveis.length > 0 ? disponiveis : variantesOrdenadas;
+  const maisBarata = base.reduce((menor, v) => (v.price < menor.price ? v : menor), base[0]);
+  const estoque = variantesOrdenadas.reduce((acc, v) => acc + v.stock, 0);
+
+  return {
+    ...p,
+    variants: variantesOrdenadas,
+    nome: p.name,
+    categoria: info.categoria,
+    subtitulo: variantesOrdenadas.map((v) => v.size).join(' · '),
+    descricao: p.description,
+    descricaoCurta: p.description,
+    tags: [...p.features, info.fase, p.category, p.slug.split('-').join(' ')],
+    preco: maisBarata.price,
+    precoOriginal: maisBarata.originalPrice,
+    imagens: p.images,
+    fase: info.fase,
+    acento: info.acento,
+    estoque,
+    emEstoque: estoque > 0,
+  };
+}
+
+// ==========================================================
+// EXPORTS OFICIAIS
+// ==========================================================
+export const products: Product[] = catalogoBase.map(normalizar);
+export const produtos: Product[] = products;
+
+export const categorias: { id: string; label: string }[] = [
+  { id: 'todos',     label: 'Todos' },
+  { id: 'substrato', label: 'Substratos & Aeração' },
+  { id: 'nutriente', label: 'Nutrientes Líquidos' },
+  { id: 'emenda',    label: 'Adubos Orgânicos' },
+  { id: 'mineral',   label: 'Insumos Minerais' },
+];
+
+export function getProdutoPorId(id: string): Product | undefined {
+  return products.find((p) => p.id === id);
+}
+
+export function getProdutoPorSlug(slug: string): Product | undefined {
+  return products.find((p) => p.slug === slug);
+}
+
+export const getProductBySlug = getProdutoPorSlug;
+export const getProductById = getProdutoPorId;
+export const getProducts = () => products;
+
+// Export default para suportar tanto importacoes nomeadas quanto padrao no Next.js
+export default products;
