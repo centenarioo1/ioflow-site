@@ -7,7 +7,7 @@ export const dynamic = 'force-dynamic';
 
 export async function GET(request: Request) {
   try {
-    // 🟢 No Next.js 15, cookies() é assíncrono (Promise) e exige 'await'
+    // 🟢 No Next.js 15, cookies() retorna uma Promise e exige o uso de await
     const cookieStore = await cookies();
     const userSession = cookieStore.get('user_session')?.value;
     
@@ -36,7 +36,7 @@ export async function GET(request: Request) {
       },
     });
 
-    if (!user || (!user.isAffiliate && user.role !== 'AFFILIATE' && user.role !== 'ADMIN')) {
+    if (!user || (!user.isAffiliate && (user.role as string) !== 'AFFILIATE' && user.role !== 'ADMIN')) {
       return NextResponse.json({ error: 'Acesso restrito a afiliados.' }, { status: 403 });
     }
 
