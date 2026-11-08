@@ -1,33 +1,46 @@
 {
-  "name": "meu-site-adubo",
+  "name": "bioflow-ecommerce",
   "version": "0.1.0",
   "private": true,
   "scripts": {
     "dev": "next dev",
     "build": "prisma generate && next build",
     "start": "next start",
-    "lint": "next lint"
+    "lint": "next lint",
+    "seed": "ts-node prisma/seed.ts"
+  },
+  "prisma": {
+    "seed": "ts-node prisma/seed.ts"
   },
   "dependencies": {
-    "@prisma/client": "^6.19.3",
-    "@supabase/supabase-js": "^2.49.1",
-    "cloudinary": "^2.5.1",
-    "clsx": "^2.1.1",
-    "framer-motion": "^11.18.2",
-    "lucide-react": "^0.475.0",
+    "@mercadopago/sdk-react": "^0.0.19",
+    "@prisma/client": "^6.4.0",
+    "@supabase/supabase-js": "^2.45.4",
+    "@tailwindcss/postcss": "^4.0.0",
+    "bcryptjs": "^3.0.3",
+    "cloudinary": "^2.10.0",
+    "framer-motion": "^12.34.1",
+    "jose": "^6.2.10",
+    "jsonwebtoken": "^9.0.3",
+    "lucide-react": "^0.453.0",
+    "mercadopago": "^2.13.0",
     "next": "15.0.1",
     "react": "^18.3.1",
     "react-dom": "^18.3.1",
-    "tailwind-merge": "^3.0.1",
-    "zustand": "^5.0.3"
+    "recharts": "^3.7.0",
+    "tailwindcss": "^4.0.0",
+    "zustand": "^5.0.1"
   },
   "devDependencies": {
-    "@types/node": "^20.17.19",
-    "@types/react": "^18.3.18",
-    "@types/react-dom": "^18.3.5",
-    "postcss": "^8.5.2",
-    "prisma": "^6.19.3",
-    "tailwindcss": "^3.4.17",
-    "typescript": "^5.7.3"
+    "@types/bcryptjs": "^2.4.6",
+    "@types/jsonwebtoken": "^9.0.10",
+    "@types/node": "^20",
+    "@types/react": "^18",
+    "@types/react-dom": "^18",
+    "eslint": "^9",
+    "eslint-config-next": "15.0.1",
+    "prisma": "^6.4.0",
+    "ts-node": "^10.9.2",
+    "typescript": "^5"
   }
 }
