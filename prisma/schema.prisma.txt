@@ -3,7 +3,7 @@ generator client {
 }
 
 datasource db {
-  provider = "postgresql"
+  provider  = "postgresql"
 }
 
 enum Role {
@@ -59,7 +59,7 @@ model Order {
   cupomCodigo         String?
 
   // Mercado Pago & Status
-  status              String       @default("Pendente") // Pendente, Aprovado, Em Preparação, Enviado, Entregue, Cancelado
+  status              String       @default("Pendente")
   mpPreferenceId      String?
   mpPaymentId         String?
   paymentMethod       String?
@@ -149,4 +149,39 @@ model PresencaChat {
   vistoEm   DateTime @default(now())
 
   @@map("presenca_chat")
+}
+
+// CATÁLOGO DINÂMICO
+model Product {
+  id          String           @id @default(cuid())
+  slug        String           @unique
+  name        String
+  category    String
+  description String
+  features    String[]         @default([])
+  images      String[]         @default([])
+  createdAt   DateTime         @default(now())
+  updatedAt   DateTime         @updatedAt
+  variants    ProductVariant[]
+
+  @@map("products")
+}
+
+model ProductVariant {
+  id            String   @id @default(cuid())
+  productId     String
+  size          String
+  price         Float
+  originalPrice Float
+  stock         Int      @default(0)
+  weight        Float    // em gramas
+  height        Float    @default(10)
+  width         Float    @default(20)
+  length        Float    @default(30)
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  product Product @relation(fields: [productId], references: [id], onDelete: Cascade)
+
+  @@map("product_variants")
 }

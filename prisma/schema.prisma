@@ -3,92 +3,112 @@ generator client {
 }
 
 datasource db {
-  provider  = "postgresql"
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
 }
 
 enum Role {
   USER
   ADMIN
+  AFFILIATE
 }
 
 model User {
-  id           String         @id @default(uuid())
-  nome         String
-  email        String         @unique
-  password     String
-  role         Role           @default(USER)
-  pontos       Int            @default(0)
-  createdAt    DateTime       @default(now())
-  updatedAt    DateTime       @updatedAt
-  orders       Order[]
-  topicos      Topico[]
-  respostas    Resposta[]
-  mensagens    ChatMensagem[]
-  presencaChat PresencaChat?
-  cuponsUsados CupomUsado[]
+  id                  String         @id @default(uuid())
+  nome                String
+  email               String         @unique
+  password            String
+  role                Role           @default(USER)
+  isAffiliate         Boolean        @default(false)
+  affiliateCoupon     String?        // Código de cupom do afiliado (ex: "CARLOS10")
+  comissaoPorcentagem Float          @default(10.0) // Taxa de comissão (%)
+  pontos              Int            @default(0)
+  createdAt           DateTime       @default(now())
+  updatedAt           DateTime       @updatedAt
+
+  orders              Order[]        @relation("ClienteOrders")
+  vendasAfiliado      Order[]        @relation("VendasAfiliado")
+  cuponsAfiliado      Cupom[]        @relation("AfiliadoCupons")
+  topicos             Topico[]
+  respostas           Resposta[]
+  mensagens           ChatMensagem[]
+  presencaChat        PresencaChat?
+  cuponsUsados        CupomUsado[]
 
   @@map("users")
 }
 
 model Order {
-  id                  String       @id @default(cuid())
-  userId              String?
-  customerName        String
-  customerEmail       String
-  customerPhone       String
-  customerCpf         String
+  id                   String       @id @default(cuid())
+  userId               String?
+  customerName         String
+  customerEmail        String
+  customerPhone        String
+  customerCpf          String
   
   // Endereço de Entrega
-  shippingCep         String
-  shippingStreet      String
-  shippingNumber      String
-  shippingComplement  String?
+  shippingCep          String
+  shippingStreet       String
+  shippingNumber       String
+  shippingComplement   String?
   shippingNeighborhood String
-  shippingCity        String
-  shippingState       String
-  shippingServiceName String?
-  shippingCost        Float        @default(0)
-  trackingCode        String?
+  shippingCity         String
+  shippingState        String
+  shippingServiceName  String?
+  shippingCost         Float        @default(0)
+  trackingCode         String?
 
   // Valores e Itens
-  items               Json         // Array com produtos, variações, preço e qtd
-  subtotal            Float
-  desconto            Float        @default(0)
-  total               Float
-  cupomId             String?
-  cupomCodigo         String?
+  items                Json         // Array com produtos, variações, preço e qtd
+  subtotal             Float
+  desconto             Float        @default(0)
+  total                Float
+  cupomId              String?
+  cupomCodigo          String?
+
+  // Afiliado & Comissão (Snapshot do momento da venda)
+  afiliadoId           String?
+  valorComissao        Float?       @default(0)
+  porcentagemComissao  Float?       @default(0)
 
   // Mercado Pago & Status
-  status              String       @default("Pendente")
-  mpPreferenceId      String?
-  mpPaymentId         String?
-  paymentMethod       String?
+  status               String       @default("Pendente")
+  mpPreferenceId       String?
+  mpPaymentId          String?
+  paymentMethod        String?
 
-  createdAt           DateTime     @default(now())
-  updatedAt           DateTime     @updatedAt
+  createdAt            DateTime     @default(now())
+  updatedAt            DateTime     @updatedAt
 
-  cupom               Cupom?       @relation(fields: [cupomId], references: [id])
-  user                User?        @relation(fields: [userId], references: [id])
+  cupom                Cupom?       @relation(fields: [cupomId], references: [id])
+  user                 User?        @relation("ClienteOrders", fields: [userId], references: [id])
+  afiliado             User?        @relation("VendasAfiliado", fields: [afiliadoId], references: [id], onDelete: SetNull)
 
   @@map("orders")
 }
 
 model Cupom {
-  id            String       @id @default(cuid())
-  codigo        String       @unique
-  descricao     String
-  tipo          String
-  valor         Float
-  valorMinimo   Float?
-  usoMaximo     Int          @default(1)
-  usoTotal      Int          @default(0)
-  limiteTotal   Int?
-  ativo         Boolean      @default(true)
-  dataInicio    DateTime     @default(now())
-  dataExpiracao DateTime?
-  createdAt     DateTime     @default(now())
-  orders        Order[]
-  cuponsUsados  CupomUsado[]
+  id                  String       @id @default(cuid())
+  codigo              String       @unique
+  descricao           String
+  tipo                String
+  valor               Float
+  valorMinimo         Float?
+  usoMaximo           Int          @default(1)
+  usoTotal            Int          @default(0)
+  limiteTotal         Int?
+  ativo               Boolean      @default(true)
+  dataInicio          DateTime     @default(now())
+  dataExpiracao       DateTime?
+  
+  // Vínculo opcional com Afiliado
+  afiliadoId          String?
+  comissaoPorcentagem Float?       // Permite personalizar a % por cupom especificamente
+
+  createdAt           DateTime     @default(now())
+  orders              Order[]
+  cuponsUsados        CupomUsado[]
+  afiliado            User?        @relation("AfiliadoCupons", fields: [afiliadoId], references: [id], onDelete: SetNull)
 
   @@map("cupons")
 }

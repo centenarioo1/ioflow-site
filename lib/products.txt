@@ -290,16 +290,21 @@ const INFO_CATEGORIA: Record<
 
 function normalizar(p: ProductBase): Product {
   const info = INFO_CATEGORIA[p.category];
-  const disponiveis = p.variants.filter((v) => v.stock > 0);
-  const base = disponiveis.length > 0 ? disponiveis : p.variants;
+  
+  // 🟢 Ordena as variações automaticamente do menor para o maior preço
+  const variantesOrdenadas = [...p.variants].sort((a, b) => a.price - b.price);
+  
+  const disponiveis = variantesOrdenadas.filter((v) => v.stock > 0);
+  const base = disponiveis.length > 0 ? disponiveis : variantesOrdenadas;
   const maisBarata = base.reduce((menor, v) => (v.price < menor.price ? v : menor), base[0]);
-  const estoque = p.variants.reduce((acc, v) => acc + v.stock, 0);
+  const estoque = variantesOrdenadas.reduce((acc, v) => acc + v.stock, 0);
 
   return {
     ...p,
+    variants: variantesOrdenadas,
     nome: p.name,
     categoria: info.categoria,
-    subtitulo: p.variants.map((v) => v.size).join(' · '),
+    subtitulo: variantesOrdenadas.map((v) => v.size).join(' · '),
     descricao: p.description,
     descricaoCurta: p.description,
     tags: [...p.features, info.fase, p.category, p.slug.split('-').join(' ')],
