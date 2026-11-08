@@ -7,7 +7,8 @@ export const dynamic = 'force-dynamic';
 
 export async function GET(request: Request) {
   try {
-    const cookieStore = cookies();
+    // 🟢 No Next.js 15, cookies() é assíncrono (Promise) e exige 'await'
+    const cookieStore = await cookies();
     const userSession = cookieStore.get('user_session')?.value;
     
     if (!userSession) {
