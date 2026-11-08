@@ -1,6 +1,6 @@
 // lib/products-dynamic.ts
-import { prisma } from '@/lib/prisma';
-import { products as fallbackProducts, Product } from '@/lib/products';
+import { prisma } from "@/lib/prisma";
+import { products as fallbackProducts, Product } from "@/lib/products";
 
 export async function getProductsFromDb(): Promise<Product[]> {
   try {
@@ -9,7 +9,7 @@ export async function getProductsFromDb(): Promise<Product[]> {
         variants: true,
       },
       orderBy: {
-        createdAt: 'asc',
+        createdAt: "asc",
       },
     });
 
@@ -17,15 +17,16 @@ export async function getProductsFromDb(): Promise<Product[]> {
       return fallbackProducts;
     }
 
-    const INFO_CATEGORIA: Record<string, { categoria: Product['categoria']; fase: string; acento: string }> = {
-      substratos:      { categoria: 'substrato', fase: 'Substrato',           acento: '#22c55e' },
-      condicionadores: { categoria: 'substrato', fase: 'Aeração & Drenagem',  acento: '#0ea5e9' },
-      fertilizantes:   { categoria: 'nutriente', fase: 'Nutrição Líquida',    acento: '#d4a843' },
-      adubos:          { categoria: 'emenda',    fase: 'Adubo Orgânico',      acento: '#b45309' },
+    const INFO_CATEGORIA: Record<string, { categoria: Product["categoria"]; fase: string; acento: string }> = {
+      substratos:      { categoria: "substrato", fase: "Substrato",           acento: "#22c55e" },
+      condicionadores: { categoria: "substrato", fase: "Aeração & Drenagem",  acento: "#0ea5e9" },
+      fertilizantes:   { categoria: "nutriente", fase: "Nutrição Líquida",    acento: "#d4a843" },
+      adubos:          { categoria: "emenda",    fase: "Adubo Orgânico",      acento: "#b45309" },
+      minerais:        { categoria: "mineral",   fase: "Insumo Mineral",      acento: "#a855f7" },
     };
 
     return dbProducts.map((p) => {
-      const info = INFO_CATEGORIA[p.category] || { categoria: 'substrato', fase: 'Produto', acento: '#22c55e' };
+      const info = INFO_CATEGORIA[p.category] || { categoria: "substrato", fase: "Produto", acento: "#22c55e" };
       
       // 🟢 ORDENAÇÃO AUTOMÁTICA DAS VARIAÇÕES PELO PREÇO (DO MENOR PARA O MAIOR)
       const variantesOrdenadas = [...p.variants].sort((a, b) => a.price - b.price);
@@ -42,7 +43,7 @@ export async function getProductsFromDb(): Promise<Product[]> {
         slug: p.slug,
         category: p.category as any,
         categoria: info.categoria,
-        subtitulo: variantesOrdenadas.map((v) => v.size).join(' · '),
+        subtitulo: variantesOrdenadas.map((v) => v.size).join(" · "),
         description: p.description,
         descricao: p.description,
         descricaoCurta: p.description,
@@ -72,7 +73,7 @@ export async function getProductsFromDb(): Promise<Product[]> {
       };
     });
   } catch (error) {
-    console.error('Erro ao buscar produtos do Supabase, usando fallback estático:', error);
+    console.error("Erro ao buscar produtos do Supabase, usando fallback estático:", error);
     return fallbackProducts;
   }
 }
