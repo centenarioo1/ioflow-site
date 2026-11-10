@@ -1,11 +1,9 @@
 // app/api/auth/callback/route.ts
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
-export const revalidate = 0;
-export const fetchCache = 'force-no-store';
 
 import { NextResponse } from 'next/server';
-import { createAuthClient } from '@/lib/supabase';
+import { createClient } from '@supabase/supabase-js';
 import { prisma } from '@/lib/prisma';
 import crypto from 'crypto';
 import { cookies } from 'next/headers';
@@ -29,18 +27,30 @@ export async function GET(request: Request) {
   }
 
   if (!code) {
-    console.warn('⚠️ [OAuth Callback] Nenhum código "code" recebido.');
     return NextResponse.redirect(
       `${requestUrl.origin}/login?erro=oauth-failed&reason=missing-code`
     );
   }
 
   try {
-    const supabase = createAuthClient();
+    // 🟢 Reads request cookies to validate PKCE code_verifier in Next.js 15
+    const cookieStore = await cookies();
+    const allCookies = cookieStore.getAll();
+    const cookieHeader = allCookies.map(c => `${c.name}=${c.value}`).join('; ');
+
+    const supabase = createClient(
+      process.env.NEXT_PUBLIC_SUPABASE_URL || '',
+      process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || '',
+      {
+        auth: { persistSession: false },
+        global: { headers: { cookie: cookieHeader } },
+      }
+    );
+
     const { data, error } = await supabase.auth.exchangeCodeForSession(code);
 
     if (error || !data.session?.user) {
-      console.error('❌ [OAuth Callback] Falha na troca do code:', error?.message);
+      console.error('❌ [OAuth Callback] Falha na troca do código:', error?.message);
       return NextResponse.redirect(
         `${requestUrl.origin}/login?erro=oauth-failed&reason=${encodeURIComponent(error?.message || 'no-session')}`
       );
@@ -56,7 +66,7 @@ export async function GET(request: Request) {
       );
     }
 
-    // 🟢 Busca usuário existente pelo e-mail ou pelo ID do Supabase
+    // 🟢 Search user by email or ID
     let dbUser = await prisma.user.findFirst({
       where: {
         OR: [{ id: sbUser.id }, { email }],
@@ -77,21 +87,19 @@ export async function GET(request: Request) {
         },
       });
     } else {
-      // 🟢 IMPORTANTE: Atualiza apenas o nome. NUNCA altera o 'id' (chave primária) 
-      // para não quebrar constraints de integridade relacional com pedidos/tabelas existentes.
+      // 🟢 PRESERVE dbUser.id to prevent PostgreSQL Foreign Key Constraint errors!
       dbUser = await prisma.user.update({
         where: { id: dbUser.id },
         data: { nome },
       });
     }
 
-    // Gera token de sessão assinado
+    // Generate signed session token
     const payload = Buffer.from(dbUser.id).toString('base64url');
     const sig = crypto.createHmac('sha256', SECRET).update(payload).digest('base64url');
     const tokenSessao = `${payload}.${sig}`;
 
-    // Define cookie seguro (compatível com Next.js 15 assíncrono)
-    const cookieStore = await cookies();
+    // Set secure cookie
     cookieStore.set(SESSION_COOKIE, tokenSessao, {
       httpOnly: true,
       secure: process.env.NODE_ENV === 'production',
@@ -103,7 +111,8 @@ export async function GET(request: Request) {
     return NextResponse.redirect(`${requestUrl.origin}${redirect}`);
 
   } catch (err: any) {
-    console.error('❌ [OAuth Callback] Erro inesperado:', err);
+    console.error('❌ [OAuth Callback] Erro crítico não tratado:', err);
+    // Exibe a mensagem real do erro na URL em vez de ocultar com internal-error
     return NextResponse.redirect(
       `${requestUrl.origin}/login?erro=oauth-failed&reason=${encodeURIComponent(err.message || 'internal-error')}`
     );
