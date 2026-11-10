@@ -3,14 +3,14 @@ generator client {
 }
 
 datasource db {
-  provider = "postgresql"
-  url      = env("DATABASE_URL")
+  provider  = "postgresql"
+  url       = env("DATABASE_URL")
+  directUrl = env("DIRECT_URL")
 }
 
 enum Role {
   USER
   ADMIN
-  AFFILIATE
 }
 
 model User {
@@ -22,7 +22,7 @@ model User {
   pontos              Int            @default(0)
   isAffiliate         Boolean        @default(false)
   affiliateCoupon     String?
-  comissaoPorcentagem Float?         @default(10)
+  comissaoPorcentagem Float?
   createdAt           DateTime       @default(now())
   updatedAt           DateTime       @updatedAt
   orders              Order[]
@@ -38,13 +38,10 @@ model User {
 model Order {
   id                  String       @id @default(cuid())
   userId              String?
-  afiliadoId          String?
   customerName        String
   customerEmail       String
   customerPhone       String
   customerCpf         String
-  
-  // Endereço de Entrega
   shippingCep         String
   shippingStreet      String
   shippingNumber      String
@@ -55,23 +52,19 @@ model Order {
   shippingServiceName String?
   shippingCost        Float        @default(0)
   trackingCode        String?
-
-  // Valores e Itens
-  items               Json         // Array com produtos, variações, preço e qtd
+  items               Json
   subtotal            Float
   desconto            Float        @default(0)
   total               Float
   cupomId             String?
   cupomCodigo         String?
+  afiliadoId          String?
   porcentagemComissao Float?
   valorComissao       Float?
-
-  // Mercado Pago & Status
   status              String       @default("Pendente")
   mpPreferenceId      String?
   mpPaymentId         String?
   paymentMethod       String?
-
   createdAt           DateTime     @default(now())
   updatedAt           DateTime     @updatedAt
 
@@ -159,7 +152,6 @@ model PresencaChat {
   @@map("presenca_chat")
 }
 
-// CATÁLOGO DINÂMICO
 model Product {
   id          String           @id @default(cuid())
   slug        String           @unique
@@ -182,7 +174,7 @@ model ProductVariant {
   price         Float
   originalPrice Float
   stock         Int      @default(0)
-  weight        Float    // em gramas
+  weight        Float
   height        Float    @default(10)
   width         Float    @default(20)
   length        Float    @default(30)
