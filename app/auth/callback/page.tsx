@@ -11,77 +11,78 @@ function CallbackContent() {
   const [erro, setErro] = useState('');
 
   useEffect(() => {
-    const processarOAuth = async () => {
-      try {
-        const code = searchParams.get('code');
-        let session = null;
+    let isMounted = true;
 
-        // 🟢 Troca o code pela sessão usando o code_verifier salvo no localStorage do navegador
-        if (code) {
-          const { data: exchangeData, error: exchangeError } = await supabase.auth.exchangeCodeForSession(code);
-          if (!exchangeError && exchangeData?.session) {
-            session = exchangeData.session;
-          } else if (exchangeError) {
-            console.warn('Troca de code por sessão falhou:', exchangeError.message);
+    // 🟢 Escuta os eventos de autenticação do Supabase no navegador em tempo real
+    const { data: { subscription } } = supabase.auth.onAuthStateChange(async (event, session) => {
+      if (!isMounted) return;
+
+      console.log('🔄 [Auth Callback] Evento detectado:', event);
+
+      if (session?.user) {
+        try {
+          const user = session.user;
+          const email = user.email;
+          const nome = user.user_metadata?.full_name || user.user_metadata?.name || 'Cultivador';
+
+          if (!email) {
+            throw new Error('O Google não forneceu um endereço de e-mail válido.');
           }
+
+          // 🚀 Envia a sessão confirmada para a API backend no Next.js
+          const res = await fetch('/api/auth/session-login', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              id: user.id,
+              email,
+              nome,
+            }),
+          });
+
+          const apiData = await res.json();
+          if (!res.ok) {
+            throw new Error(apiData.error || 'Erro ao sincronizar sessão no servidor.');
+          }
+
+          // Salva no localStorage para compatibilidade das páginas locais
+          localStorage.setItem('user_session', JSON.stringify({
+            id: apiData.user.id,
+            nome: apiData.user.nome,
+            email: apiData.user.email,
+            role: apiData.user.role,
+          }));
+
+          const redirect = searchParams.get('redirect') || '/dashboard';
+          router.push(redirect);
+
+        } catch (err: any) {
+          console.error('❌ [OAuth Callback] Erro na sincronização:', err);
+          if (isMounted) setErro(err.message || 'Erro ao sincronizar conta.');
         }
+      }
+    });
 
-        // Tenta recuperar a sessão ativa no cliente
-        if (!session) {
-          const { data: sessionData } = await supabase.auth.getSession();
-          session = sessionData?.session || null;
-        }
-
-        if (!session?.user) {
-          throw new Error('Não foi possível recuperar a sessão do Google.');
-        }
-
-        const user = session.user;
-        const email = user.email;
-        const nome = user.user_metadata?.full_name || user.user_metadata?.name || 'Cultivador';
-
-        if (!email) {
-          throw new Error('O Google não forneceu um endereço de e-mail válido.');
-        }
-
-        // Envia para o backend criar o perfil no Prisma e o cookie bioflow_session
-        const res = await fetch('/api/auth/session-login', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            id: user.id,
-            email,
-            nome,
-          }),
-        });
-
-        const apiData = await res.json();
-        if (!res.ok) {
-          throw new Error(apiData.error || 'Erro ao sincronizar sessão no servidor.');
-        }
-
-        // Grava no localStorage para compatibilidade das páginas da loja
-        localStorage.setItem('user_session', JSON.stringify({
-          id: apiData.user.id,
-          nome: apiData.user.nome,
-          email: apiData.user.email,
-          role: apiData.user.role,
-        }));
-
-        const redirect = searchParams.get('redirect') || '/dashboard';
-        router.push(redirect);
-
-      } catch (err: any) {
-        console.error('❌ [OAuth Callback] Erro no fluxo:', err);
-        setErro(err.message || 'Erro durante o login com o Google.');
-        
-        setTimeout(() => {
-          router.push(`/login?erro=oauth-failed&reason=${encodeURIComponent(err.message || 'error')}`);
-        }, 3000);
+    // 🟢 Checagem de contingência caso a sessão já estivesse pronta antes do listener montar
+    const checarSessaoAtiva = async () => {
+      const { data } = await supabase.auth.getSession();
+      if (!data.session?.user) {
+        // Dá um pequeno tempo de 2.5s para o listener capturar a validação do token
+        setTimeout(async () => {
+          const { data: retryData } = await supabase.auth.getSession();
+          if (!retryData.session?.user && isMounted && !erro) {
+            setErro('Não foi possível recuperar a sessão do Google. Tente novamente.');
+          }
+        }, 2500);
       }
     };
 
-    processarOAuth();
+    checarSessaoAtiva();
+
+    return () => {
+      isMounted = false;
+      subscription.unsubscribe();
+    };
   }, [router, searchParams]);
 
   return (
