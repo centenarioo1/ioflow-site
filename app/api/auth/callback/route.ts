@@ -34,13 +34,22 @@ export async function GET(request: Request) {
   try {
     const cookieStore = await cookies();
     
-    // 🟢 Lê o PKCE code_verifier enviado nos Cookies HTTP
+    // 🟢 Adaptador de Cookie tipado explicitamente retornando void em setItem e removeItem
     const serverCookieStorage = {
-      getItem: (key: string) => cookieStore.get(key)?.value || null,
-      setItem: (key: string, value: string) => {
-        cookieStore.set(key, value, { path: '/', maxAge: 86400, sameSite: 'lax', secure: process.env.NODE_ENV === 'production' });
+      getItem: (key: string): string | null => {
+        return cookieStore.get(key)?.value || null;
       },
-      removeItem: (key: string) => cookieStore.delete(key),
+      setItem: (key: string, value: string): void => {
+        cookieStore.set(key, value, {
+          path: '/',
+          maxAge: 86400,
+          sameSite: 'lax',
+          secure: process.env.NODE_ENV === 'production',
+        });
+      },
+      removeItem: (key: string): void => {
+        cookieStore.delete(key);
+      },
     };
 
     const supabase = createClient(
