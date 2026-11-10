@@ -1,4 +1,3 @@
-// app/api/auth/register/route.ts
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
 
@@ -27,7 +26,7 @@ export async function POST(req: Request) {
       );
     }
 
-    // 1. Verifica se já existe usuário cadastrado no banco pelo e-mail
+    // 1. Verifica se já existe usuário cadastrado pelo e-mail
     const existingUser = await prisma.user.findUnique({
       where: { email },
     });
@@ -60,11 +59,11 @@ export async function POST(req: Request) {
     const sbUser = authData.user;
     const userId = sbUser?.id;
 
-    // 3. Define permissão (ADMIN se for o e-mail administrativo)
+    // 3. Define a permissão (ADMIN se for o e-mail administrativo)
     const adminEmail = (process.env.ADMIN_EMAIL || '').trim().toLowerCase();
     const role = adminEmail && email === adminEmail ? 'ADMIN' : 'USER';
 
-    // 4. Registra o perfil público na tabela 'users' via Prisma
+    // 4. Registra o perfil público no PostgreSQL via Prisma
     const dbUser = await prisma.user.create({
       data: {
         ...(userId ? { id: userId } : {}),
