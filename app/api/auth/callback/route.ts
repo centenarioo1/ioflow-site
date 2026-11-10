@@ -1,11 +1,9 @@
 // app/api/auth/callback/route.ts
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
-export const revalidate = 0;
-export const fetchCache = 'force-no-store';
 
 import { NextResponse } from 'next/server';
-import { createAuthClient } from '@/lib/supabase';
+import { createClient } from '@supabase/supabase-js';
 import { prisma } from '@/lib/prisma';
 import crypto from 'crypto';
 import { cookies } from 'next/headers';
@@ -17,30 +15,39 @@ export async function GET(request: Request) {
   const requestUrl = new URL(request.url);
   const code = requestUrl.searchParams.get('code');
   const redirect = requestUrl.searchParams.get('redirect') || '/dashboard';
-  
-  const errorType = requestUrl.searchParams.get('error');
-  const errorDesc = requestUrl.searchParams.get('error_description');
-
-  if (errorType) {
-    console.error(`❌ [OAuth Callback] Erro retornado pelo Supabase: ${errorType} - ${errorDesc}`);
-    return NextResponse.redirect(
-      `${requestUrl.origin}/login?erro=oauth-failed&reason=${encodeURIComponent(errorDesc || errorType)}`
-    );
-  }
 
   if (!code) {
-    console.warn('⚠️ [OAuth Callback] Nenhum código "code" recebido.');
-    return NextResponse.redirect(
-      `${requestUrl.origin}/login?erro=oauth-failed&reason=missing-code`
-    );
+    return NextResponse.redirect(`${requestUrl.origin}/login?erro=oauth-failed&reason=missing-code`);
   }
 
   try {
-    const supabase = createAuthClient();
+    // 🟢 No Next.js 15, cookies() precisa de await
+    const cookieStore = await cookies();
+    
+    // Constrói os cabeçalhos de Cookie da requisição para repassar o PKCE ao Supabase
+    const allCookies = cookieStore.getAll();
+    const cookieHeader = allCookies.map(c => `${c.name}=${c.value}`).join('; ');
+
+    const supabase = createClient(
+      process.env.NEXT_PUBLIC_SUPABASE_URL || '',
+      process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || '',
+      {
+        auth: {
+          persistSession: false,
+        },
+        global: {
+          headers: {
+            cookie: cookieHeader,
+          },
+        },
+      }
+    );
+
+    // 🟢 Troca o code por sessão validando o PKCE recebido nos cookies
     const { data, error } = await supabase.auth.exchangeCodeForSession(code);
 
     if (error || !data.session?.user) {
-      console.error('❌ [OAuth Callback] Falha na troca do code:', error?.message);
+      console.error('❌ Erro na troca do code do Google:', error?.message);
       return NextResponse.redirect(
         `${requestUrl.origin}/login?erro=oauth-failed&reason=${encodeURIComponent(error?.message || 'no-session')}`
       );
@@ -51,16 +58,12 @@ export async function GET(request: Request) {
     const nome = sbUser.user_metadata?.full_name || sbUser.user_metadata?.name || 'Cultivador';
 
     if (!email) {
-      return NextResponse.redirect(
-        `${requestUrl.origin}/login?erro=oauth-failed&reason=missing-email`
-      );
+      return NextResponse.redirect(`${requestUrl.origin}/login?erro=oauth-failed&reason=missing-email`);
     }
 
-    // 🟢 Busca usuário existente pelo e-mail ou pelo ID do Supabase
+    // 🟢 Busca ou cria o usuário mantendo as chaves relacionais no banco
     let dbUser = await prisma.user.findFirst({
-      where: {
-        OR: [{ id: sbUser.id }, { email }],
-      },
+      where: { OR: [{ id: sbUser.id }, { email }] },
     });
 
     if (!dbUser) {
@@ -77,20 +80,17 @@ export async function GET(request: Request) {
         },
       });
     } else {
-      // 🟢 Preserva o 'id' existente para não quebrar tabelas relacionais (orders, cupons, etc)
       dbUser = await prisma.user.update({
         where: { id: dbUser.id },
         data: { nome },
       });
     }
 
-    // Gera token de sessão assinado
+    // Cria o token de sessão local
     const payload = Buffer.from(dbUser.id).toString('base64url');
     const sig = crypto.createHmac('sha256', SECRET).update(payload).digest('base64url');
     const tokenSessao = `${payload}.${sig}`;
 
-    // Define cookie seguro (compatível com Next.js 15 assíncrono)
-    const cookieStore = await cookies();
     cookieStore.set(SESSION_COOKIE, tokenSessao, {
       httpOnly: true,
       secure: process.env.NODE_ENV === 'production',
@@ -102,7 +102,7 @@ export async function GET(request: Request) {
     return NextResponse.redirect(`${requestUrl.origin}${redirect}`);
 
   } catch (err: any) {
-    console.error('❌ [OAuth Callback] Erro inesperado:', err);
+    console.error('❌ Erro crítico no callback do Google:', err);
     return NextResponse.redirect(
       `${requestUrl.origin}/login?erro=oauth-failed&reason=${encodeURIComponent(err.message || 'internal-error')}`
     );
