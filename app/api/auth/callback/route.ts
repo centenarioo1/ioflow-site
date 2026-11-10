@@ -22,12 +22,14 @@ export async function GET(request: Request) {
   const errorDesc = requestUrl.searchParams.get('error_description');
 
   if (errorType) {
+    console.error(`❌ [OAuth Callback] Erro retornado pelo Supabase: ${errorType} - ${errorDesc}`);
     return NextResponse.redirect(
       `${requestUrl.origin}/login?erro=oauth-failed&reason=${encodeURIComponent(errorDesc || errorType)}`
     );
   }
 
   if (!code) {
+    console.warn('⚠️ [OAuth Callback] Nenhum código "code" recebido.');
     return NextResponse.redirect(
       `${requestUrl.origin}/login?erro=oauth-failed&reason=missing-code`
     );
@@ -38,8 +40,9 @@ export async function GET(request: Request) {
     const { data, error } = await supabase.auth.exchangeCodeForSession(code);
 
     if (error || !data.session?.user) {
+      console.error('❌ [OAuth Callback] Falha na troca do code:', error?.message);
       return NextResponse.redirect(
-        `${requestUrl.origin}/login?erro=oauth-failed&reason=no-session`
+        `${requestUrl.origin}/login?erro=oauth-failed&reason=${encodeURIComponent(error?.message || 'no-session')}`
       );
     }
 
@@ -53,6 +56,7 @@ export async function GET(request: Request) {
       );
     }
 
+    // 🟢 Busca usuário existente pelo e-mail ou pelo ID do Supabase
     let dbUser = await prisma.user.findFirst({
       where: {
         OR: [{ id: sbUser.id }, { email }],
@@ -73,16 +77,19 @@ export async function GET(request: Request) {
         },
       });
     } else {
+      // 🟢 Preserva o 'id' existente para não quebrar tabelas relacionais (orders, cupons, etc)
       dbUser = await prisma.user.update({
         where: { id: dbUser.id },
         data: { nome },
       });
     }
 
+    // Gera token de sessão assinado
     const payload = Buffer.from(dbUser.id).toString('base64url');
     const sig = crypto.createHmac('sha256', SECRET).update(payload).digest('base64url');
     const tokenSessao = `${payload}.${sig}`;
 
+    // Define cookie seguro (compatível com Next.js 15 assíncrono)
     const cookieStore = await cookies();
     cookieStore.set(SESSION_COOKIE, tokenSessao, {
       httpOnly: true,
@@ -95,8 +102,9 @@ export async function GET(request: Request) {
     return NextResponse.redirect(`${requestUrl.origin}${redirect}`);
 
   } catch (err: any) {
+    console.error('❌ [OAuth Callback] Erro inesperado:', err);
     return NextResponse.redirect(
-      `${requestUrl.origin}/login?erro=oauth-failed&reason=internal-error`
+      `${requestUrl.origin}/login?erro=oauth-failed&reason=${encodeURIComponent(err.message || 'internal-error')}`
     );
   }
 }
