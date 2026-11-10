@@ -1,57 +1,96 @@
 // app/api/auth/register/route.ts
+export const runtime = 'nodejs';
+export const dynamic = 'force-dynamic';
+
 import { NextResponse } from 'next/server';
+import { createAuthClient } from '@/lib/supabase';
 import { prisma } from '@/lib/prisma';
-import { hashPassword } from '@/lib/authHelper';
 
 export async function POST(req: Request) {
   try {
     const body = await req.json();
-    
-    // Suporta tanto o envio em português quanto em inglês
-    const nomeInput = body.nome || body.name;
-    const emailInput = body.email;
-    const senhaInput = body.senha || body.password;
+    const nome = body.nome?.trim();
+    const email = body.email?.trim().toLowerCase();
+    const password = body.senha || body.password;
 
-    // 1. Validação básica de campos obrigatórios
-    if (!nomeInput?.trim() || !emailInput?.trim() || !senhaInput?.trim()) {
-      return NextResponse.json({ error: 'Nome, E-mail e Senha são obrigatórios.' }, { status: 400 });
+    if (!nome || !email || !password) {
+      return NextResponse.json(
+        { error: 'Nome, e-mail e senha são obrigatórios.' },
+        { status: 400 }
+      );
     }
 
-    const emailFormatado = emailInput.trim().toLowerCase();
+    if (password.length < 6) {
+      return NextResponse.json(
+        { error: 'A senha deve conter no mínimo 6 caracteres.' },
+        { status: 400 }
+      );
+    }
 
-    // 2. Bloqueio de e-mail duplicado (Validação profissional)
-    const usuarioExistente = await prisma.user.findUnique({
-      where: { email: emailFormatado },
+    // 1. Verifica se já existe usuário cadastrado no banco pelo e-mail
+    const existingUser = await prisma.user.findUnique({
+      where: { email },
     });
 
-    if (usuarioExistente) {
-      return NextResponse.json({ error: 'Este endereço de e-mail já está sendo utilizado.' }, { status: 400 });
+    if (existingUser) {
+      return NextResponse.json(
+        { error: 'Este e-mail já está cadastrado. Faça login para continuar.' },
+        { status: 400 }
+      );
     }
 
-    // 3. Criação segura do usuário gravando apenas os campos reais da tabela User
-    const novoUsuario = await prisma.user.create({
+    // 2. Cria a conta no Supabase Auth
+    const supabase = createAuthClient();
+    const { data: authData, error: authError } = await supabase.auth.signUp({
+      email,
+      password,
+      options: {
+        data: { nome },
+      },
+    });
+
+    if (authError) {
+      console.error('❌ Erro no Supabase Auth SignUp:', authError.message);
+      return NextResponse.json(
+        { error: authError.message || 'Erro ao criar conta no serviço de autenticação.' },
+        { status: 400 }
+      );
+    }
+
+    const sbUser = authData.user;
+    const userId = sbUser?.id;
+
+    // 3. Define permissão (ADMIN se for o e-mail administrativo)
+    const adminEmail = (process.env.ADMIN_EMAIL || '').trim().toLowerCase();
+    const role = adminEmail && email === adminEmail ? 'ADMIN' : 'USER';
+
+    // 4. Registra o perfil público na tabela 'users' via Prisma
+    const dbUser = await prisma.user.create({
       data: {
-        nome: nomeInput.trim(),
-        email: emailFormatado,
-        password: hashPassword(senhaInput),
-        role: 'USER', // Todas as contas nascem como USER
+        ...(userId ? { id: userId } : {}),
+        nome,
+        email,
+        password: 'SUPABASE_AUTH_PROVIDER',
+        role,
       },
     });
 
     return NextResponse.json({
-      success: true,
-      ok: true, // Mantém compatibilidade com verificações legadas
-      message: 'Usuário cadastrado com sucesso!',
+      ok: true,
+      message: 'Conta criada com sucesso!',
       user: {
-        id: novoUsuario.id,
-        nome: novoUsuario.nome,
-        email: novoUsuario.email,
-        role: novoUsuario.role,
-      }
+        id: dbUser.id,
+        nome: dbUser.nome,
+        email: dbUser.email,
+        role: dbUser.role,
+      },
     });
 
-  } catch (error: any) {
-    console.error('❌ Erro no cadastro de usuário:', error);
-    return NextResponse.json({ error: 'Erro interno no servidor ao processar o cadastro.' }, { status: 500 });
+  } catch (err: any) {
+    console.error('❌ Erro ao criar conta:', err);
+    return NextResponse.json(
+      { error: err.message || 'Erro interno no servidor ao realizar cadastro.' },
+      { status: 500 }
+    );
   }
 }
