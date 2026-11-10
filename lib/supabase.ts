@@ -1,30 +1,38 @@
 // lib/supabase.ts
 import { createClient } from '@supabase/supabase-js';
 
-// Usa um fallback de URL com formato válido para evitar que a biblioteca @supabase/supabase-js
-// lance um erro 'Invalid URL' durante a avaliação do módulo (module evaluation) no build da Vercel.
-const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL || '[suspicious link removed]';
-const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || 'placeholder-anon-key';
+const url = process.env.NEXT_PUBLIC_SUPABASE_URL || '';
+const key = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || '';
 
-if (!process.env.NEXT_PUBLIC_SUPABASE_URL || !process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY) {
-  console.warn(
-    'Aviso: Faltam as variáveis NEXT_PUBLIC_SUPABASE_URL e NEXT_PUBLIC_SUPABASE_ANON_KEY no ambiente.'
-  );
-}
+// 🟢 Salva o token PKCE em Cookies para o servidor ler durante o callback
+const customCookieStorage = {
+  getItem: (k: string) => {
+    if (typeof document === 'undefined') return null;
+    const match = document.cookie.match(new RegExp('(^| )' + k + '=([^;]+)'));
+    return match ? decodeURIComponent(match[6]) : null;
+  },
+  setItem: (k: string, v: string) => {
+    if (typeof document === 'undefined') return;
+    document.cookie = `${k}=${encodeURIComponent(v)}; path=/; max-age=86400; SameSite=Lax; Secure`;
+  },
+  removeItem: (k: string) => {
+    if (typeof document === 'undefined') return;
+    document.cookie = `${k}=; path=/; expires=Thu, 01 Jan 1970 00:00:00 GMT; SameSite=Lax; Secure`;
+  },
+};
 
-// 🚨 CLIENTE EXCLUSIVO DO NAVEGADOR (Com suporte obrigatório a PKCE)
-export const supabase = createClient(supabaseUrl, supabaseAnonKey, {
+export const supabase = createClient(url, key, {
   auth: { 
     persistSession: true,
     autoRefreshToken: true,
     detectSessionInUrl: true,
-    flowType: 'pkce'
+    flowType: 'pkce',
+    storage: customCookieStorage,
   },
 });
 
-// Cliente limpo para operações do Servidor (Node/NextJS APIs)
 export function createAuthClient() {
-  return createClient(supabaseUrl, supabaseAnonKey, {
+  return createClient(url, key, {
     auth: { 
       persistSession: false, 
       autoRefreshToken: false 
