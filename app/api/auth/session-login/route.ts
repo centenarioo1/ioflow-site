@@ -24,6 +24,14 @@ export async function POST(req: Request) {
 
     const emailClean = email.trim().toLowerCase();
 
+    // 🟢 SELECT explícito: Seleciona apenas colunas que garantidamente existem no banco
+    const userSelect = {
+      id: true,
+      nome: true,
+      email: true,
+      role: true,
+    };
+
     // 1. Busca usuário existente pelo ID do Supabase ou pelo E-mail no Prisma
     let dbUser = await prisma.user.findFirst({
       where: {
@@ -32,6 +40,7 @@ export async function POST(req: Request) {
           { email: emailClean },
         ],
       },
+      select: userSelect,
     });
 
     // 2. Cria se não existir
@@ -41,18 +50,20 @@ export async function POST(req: Request) {
 
       dbUser = await prisma.user.create({
         data: {
-          id: id || undefined,
+          ...(id ? { id: String(id) } : {}),
           nome: nome || 'Cultivador',
           email: emailClean,
           password: 'SUPABASE_AUTH_PROVIDER',
           role,
         },
+        select: userSelect,
       });
     } else {
-      // 🟢 PRESERVA dbUser.id para não violar chaves estrangeiras com pedidos/tópicos
+      // Preserva o dbUser.id original para não violar chaves estrangeiras
       dbUser = await prisma.user.update({
         where: { id: dbUser.id },
         data: { nome: nome || dbUser.nome },
+        select: userSelect,
       });
     }
 
@@ -61,7 +72,7 @@ export async function POST(req: Request) {
     const sig = crypto.createHmac('sha256', SECRET).update(payload).digest('base64url');
     const tokenSessao = `${payload}.${sig}`;
 
-    // 4. Grava o cookie seguro no Next.js 15
+    // 4. Grava o cookie seguro bioflow_session
     const cookieStore = await cookies();
     cookieStore.set(SESSION_COOKIE, tokenSessao, {
       httpOnly: true,
