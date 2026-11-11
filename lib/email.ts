@@ -1,4 +1,47 @@
+// lib/email.ts
+import { Resend } from 'resend';
 
+const resend = new Resend(process.env.RESEND_API_KEY);
+
+interface ItemPedido {
+  nome: string;
+  quantidade: number;
+  preco: number;
+}
+
+interface DadosEmailPedido {
+  emailCliente: string;
+  nomeCliente: string;
+  numeroPedido: string;
+  itens: ItemPedido[];
+  valorTotal: number;
+  metodoPagamento: string;
+  enderecoEntrega?: string;
+}
+
+export async function enviarEmailConfirmacaoPedido(dados: DadosEmailPedido) {
+  try {
+    const { emailCliente, nomeCliente, numeroPedido, itens, valorTotal, metodoPagamento, enderecoEntrega } = dados;
+
+    // 1. Monta as linhas da tabela de produtos em HTML
+    const itensHtml = itens
+      .map(
+        (item) => `
+        <tr>
+          <td style="padding: 10px; border-bottom: 1px solid #e7e2d6; color: #132e13; font-weight: 600;">${item.nome}</td>
+          <td style="padding: 10px; border-bottom: 1px solid #e7e2d6; text-align: center; color: #6b7280;">${item.quantidade}x</td>
+          <td style="padding: 10px; border-bottom: 1px solid #e7e2d6; text-align: right; color: #132e13; font-weight: 700;">R$ ${(item.preco * item.quantidade).toFixed(2).replace('.', ',')}</td>
+        </tr>
+      `
+      )
+      .join('');
+
+    // 2. 🟢 CORRIGIDO: Monta o HTML do endereço previamente para evitar aninhamento de template literals
+    const enderecoHtml = enderecoEntrega
+      ? `<p style="font-size: 13px; color: #6b7280; margin-bottom: 20px;"><strong>Endereço de Entrega:</strong><br />${enderecoEntrega}</p>`
+      : '';
+
+    // 3. Template HTML principal do e-mail
     const htmlTemplate = `
       <div style="font-family: 'Helvetica Neue', Helvetica, Arial, sans-serif; background-color: #f7f4ee; padding: 30px 10px; color: #1f2937;">
         <div style="max-width: 600px; margin: 0 auto; background-color: #ffffff; border-radius: 16px; overflow: hidden; border: 1px solid #e7e2d6; box-shadow: 0 4px 20px rgba(0,0,0,0.03);">
@@ -48,11 +91,7 @@
               </div>
             </div>
 
-            ${
-              enderecoEntrega
-                ? `<p style="font-size: 13px; color: #6b7280; margin-bottom: 20px;"><strong>Endereço de Entrega:</strong><br />${enderecoEntrega}</p>`
-                : ''
-            }
+            ${enderecoHtml}
 
             <div style="text-align: center; margin-top: 30px;">
               <a href="[suspicious link removed]" style="background-color: #15803d; color: #ffffff; padding: 12px 24px; text-decoration: none; border-radius: 10px; font-weight: 800; font-size: 13px; display: inline-block;">
