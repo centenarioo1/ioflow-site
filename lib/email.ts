@@ -123,7 +123,7 @@ export async function enviarEmailConfirmacaoPedido(dados: DadosEmailPedido) {
       </div>
     `;
 
-    const remetente = process.env.EMAIL_REMETENTE || 'Bioflow Orgânicos <onboarding@resend.dev>';
+    const remetente = process.env.EMAIL_REMETENTE || 'Bioflow Orgânicos <vendas@biofloworganicos.com.br>';
 
     const response = await resend.emails.send({
       from: remetente,
