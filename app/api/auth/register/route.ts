@@ -26,7 +26,6 @@ export async function POST(req: Request) {
       );
     }
 
-    // 1. Verifica se já existe usuário cadastrado pelo e-mail
     const existingUser = await prisma.user.findUnique({
       where: { email },
     });
@@ -38,7 +37,6 @@ export async function POST(req: Request) {
       );
     }
 
-    // 2. Cria a conta no Supabase Auth
     const supabase = createAuthClient();
     const { data: authData, error: authError } = await supabase.auth.signUp({
       email,
@@ -59,11 +57,9 @@ export async function POST(req: Request) {
     const sbUser = authData.user;
     const userId = sbUser?.id;
 
-    // 3. Define a permissão (ADMIN se for o e-mail administrativo)
     const adminEmail = (process.env.ADMIN_EMAIL || '').trim().toLowerCase();
     const role = adminEmail && email === adminEmail ? 'ADMIN' : 'USER';
 
-    // 4. Registra o perfil público no PostgreSQL via Prisma
     const dbUser = await prisma.user.create({
       data: {
         ...(userId ? { id: userId } : {}),

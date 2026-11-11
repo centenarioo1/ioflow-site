@@ -14,7 +14,6 @@ function CallbackContent() {
   useEffect(() => {
     let isMounted = true;
 
-    // 🟢 Listener em tempo real para capturar a sessão assim que o Supabase trocar o token
     const { data: { subscription } } = supabase.auth.onAuthStateChange(async (event, session) => {
       if (!isMounted) return;
 
@@ -28,7 +27,6 @@ function CallbackContent() {
             throw new Error('O Google não forneceu um endereço de e-mail válido.');
           }
 
-          // Sincroniza com a API do servidor (Prisma + Cookie bioflow_session)
           const res = await fetch('/api/auth/session-login', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
@@ -61,7 +59,6 @@ function CallbackContent() {
       }
     });
 
-    // Contingência de validação
     const checarSessao = async () => {
       const code = searchParams.get('code');
       if (code) {
@@ -122,3 +119,4 @@ export default function AuthCallbackPage() {
       <CallbackContent />
     </Suspense>
   );
+} // 🟢 Chave '}' adicionada aqui!
