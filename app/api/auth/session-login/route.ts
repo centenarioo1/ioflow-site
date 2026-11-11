@@ -24,7 +24,7 @@ export async function POST(req: Request) {
 
     const emailClean = email.trim().toLowerCase();
 
-    // 🟢 SELECT explícito: Seleciona apenas colunas que garantidamente existem no banco
+    // 🟢 SELECT explícito para evitar erros de colunas inexistentes (como isAffiliate)
     const userSelect = {
       id: true,
       nome: true,
@@ -32,7 +32,7 @@ export async function POST(req: Request) {
       role: true,
     };
 
-    // 1. Busca usuário existente pelo ID do Supabase ou pelo E-mail no Prisma
+    // 1. Busca usuário existente pelo ID do Supabase ou E-mail no Prisma
     let dbUser = await prisma.user.findFirst({
       where: {
         OR: [
@@ -43,7 +43,7 @@ export async function POST(req: Request) {
       select: userSelect,
     });
 
-    // 2. Cria se não existir
+    // 2. Cria se não existir no banco
     if (!dbUser) {
       const adminEmail = (process.env.ADMIN_EMAIL || '').trim().toLowerCase();
       const role = adminEmail && emailClean === adminEmail ? 'ADMIN' : 'USER';
@@ -59,7 +59,7 @@ export async function POST(req: Request) {
         select: userSelect,
       });
     } else {
-      // Preserva o dbUser.id original para não violar chaves estrangeiras
+      // 🟢 Preserva o dbUser.id original para não violar chaves estrangeiras com pedidos
       dbUser = await prisma.user.update({
         where: { id: dbUser.id },
         data: { nome: nome || dbUser.nome },

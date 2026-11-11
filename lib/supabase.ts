@@ -5,7 +5,7 @@ const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL || '';
 const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || '';
 
 if (!supabaseUrl || !supabaseAnonKey) {
-  console.warn('Aviso: Faltam as variáveis NEXT_PUBLIC_SUPABASE_URL e NEXT_PUBLIC_SUPABASE_ANON_KEY.');
+  console.warn('Aviso: Faltam as variáveis NEXT_PUBLIC_SUPABASE_URL e NEXT_PUBLIC_SUPABASE_ANON_KEY no ambiente.');
 }
 
 // 🟢 CLIENTE DO NAVEGADOR: Usa o storage nativo (localStorage) para manter o PKCE intacto entre redirecionamentos
@@ -18,7 +18,7 @@ export const supabase = createClient(supabaseUrl, supabaseAnonKey, {
   },
 });
 
-// Cliente auxiliar para o servidor
+// Cliente auxiliar para o servidor (operações administrativas/sem sessão)
 export function createAuthClient() {
   return createClient(supabaseUrl, supabaseAnonKey, {
     auth: { 
