@@ -1,8 +1,6 @@
 // lib/email.ts
 import { Resend } from 'resend';
 
-const resend = new Resend(process.env.RESEND_API_KEY);
-
 interface ItemPedido {
   nome: string;
   quantidade: number;
@@ -19,8 +17,24 @@ interface DadosEmailPedido {
   enderecoEntrega?: string;
 }
 
+// 🟢 Instanciação Preguiçosa (Lazy Load): Evita que o build da Vercel quebre ao compilar
+function getResendClient() {
+  const apiKey = process.env.RESEND_API_KEY;
+  if (!apiKey) {
+    console.warn('⚠️ [Email Service] RESEND_API_KEY não configurada nas variáveis de ambiente.');
+    return null;
+  }
+  return new Resend(apiKey);
+}
+
 export async function enviarEmailConfirmacaoPedido(dados: DadosEmailPedido) {
   try {
+    const resend = getResendClient();
+    if (!resend) {
+      console.warn('⚠️ [Email Service] Abortando envio: RESEND_API_KEY não encontrada.');
+      return { ok: false, error: 'RESEND_API_KEY não configurada' };
+    }
+
     const { emailCliente, nomeCliente, numeroPedido, itens, valorTotal, metodoPagamento, enderecoEntrega } = dados;
 
     // 1. Monta as linhas da tabela de produtos em HTML
@@ -36,7 +50,7 @@ export async function enviarEmailConfirmacaoPedido(dados: DadosEmailPedido) {
       )
       .join('');
 
-    // 2. 🟢 CORRIGIDO: Monta o HTML do endereço previamente para evitar aninhamento de template literals
+    // 2. Monta o HTML do endereço previamente
     const enderecoHtml = enderecoEntrega
       ? `<p style="font-size: 13px; color: #6b7280; margin-bottom: 20px;"><strong>Endereço de Entrega:</strong><br />${enderecoEntrega}</p>`
       : '';
