@@ -12,79 +12,71 @@ function CallbackContent() {
   const [erro, setErro] = useState('');
 
   useEffect(() => {
-    let isMounted = true;
+    let processado = false;
 
-    const { data: { subscription } } = supabase.auth.onAuthStateChange(async (event, session) => {
-      if (!isMounted) return;
+    const autenticar = async () => {
+      if (processado) return;
+      processado = true;
 
-      if (session?.user) {
-        try {
-          const user = session.user;
-          const email = user.email;
-          const nome = user.user_metadata?.full_name || user.user_metadata?.name || 'Cultivador';
+      try {
+        const code = searchParams.get('code');
+        let userSession = null;
 
-          if (!email) {
-            throw new Error('O Google não forneceu um endereço de e-mail válido.');
+        // 1. Se veio o código do Google na URL, troca pelo token de sessão usando o PKCE do localStorage
+        if (code) {
+          const { data, error } = await supabase.auth.exchangeCodeForSession(code);
+          if (!error && data?.session) {
+            userSession = data.session;
           }
-
-          const res = await fetch('/api/auth/session-login', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-              id: user.id,
-              email,
-              nome,
-            }),
-          });
-
-          const apiData = await res.json();
-          if (!res.ok) {
-            throw new Error(apiData.error || 'Erro ao sincronizar sessão no servidor.');
-          }
-
-          localStorage.setItem('user_session', JSON.stringify({
-            id: apiData.user.id,
-            nome: apiData.user.nome,
-            email: apiData.user.email,
-            role: apiData.user.role,
-          }));
-
-          const redirect = searchParams.get('redirect') || '/dashboard';
-          router.push(redirect);
-
-        } catch (err: any) {
-          console.error('❌ [OAuth Callback] Erro na sincronização:', err);
-          if (isMounted) setErro(err.message || 'Erro ao sincronizar conta.');
         }
-      }
-    });
 
-    const checarSessao = async () => {
-      const code = searchParams.get('code');
-      if (code) {
-        const { data: exchangeData, error: exchangeError } = await supabase.auth.exchangeCodeForSession(code);
-        if (exchangeError) {
-          console.warn('Aviso no exchangeCodeForSession:', exchangeError.message);
+        // 2. Se a troca manual já foi feita ou o detectSessionInUrl atuou, recupera a sessão ativa
+        if (!userSession) {
+          const { data } = await supabase.auth.getSession();
+          userSession = data?.session || null;
         }
-      }
 
-      const { data } = await supabase.auth.getSession();
-      if (!data.session?.user) {
-        setTimeout(async () => {
-          const { data: retryData } = await supabase.auth.getSession();
-          if (!retryData.session?.user && isMounted && !erro) {
-            setErro('Não foi possível recuperar a sessão do Google.');
-          }
-        }, 3000);
+        if (!userSession?.user) {
+          throw new Error('Não foi possível recuperar a sessão do Google.');
+        }
+
+        const user = userSession.user;
+        const email = user.email;
+        const nome = user.user_metadata?.full_name || user.user_metadata?.name || 'Cultivador';
+
+        if (!email) {
+          throw new Error('O Google não forneceu um e-mail válido.');
+        }
+
+        // 3. Sincroniza com a API do servidor (Prisma + Cookie bioflow_session)
+        const res = await fetch('/api/auth/session-login', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ id: user.id, email, nome }),
+        });
+
+        const apiData = await res.json();
+        if (!res.ok) {
+          throw new Error(apiData.error || 'Erro ao sincronizar sessão no servidor.');
+        }
+
+        localStorage.setItem('user_session', JSON.stringify({
+          id: apiData.user.id,
+          nome: apiData.user.nome,
+          email: apiData.user.email,
+          role: apiData.user.role,
+        }));
+
+        const redirect = searchParams.get('redirect') || '/dashboard';
+        router.push(redirect);
+
+      } catch (err: any) {
+        console.error('❌ Erro no Callback OAuth:', err);
+        setErro(err.message || 'Erro ao autenticar com o Google.');
       }
     };
 
-    checarSessao();
-
-    return () => {
-      isMounted = false;
-      subscription.unsubscribe();
-    };
+    autenticar();
   }, [router, searchParams]);
 
   return (
@@ -119,4 +111,4 @@ export default function AuthCallbackPage() {
       <CallbackContent />
     </Suspense>
   );
-} // 🟢 Chave '}' adicionada aqui!
+}
