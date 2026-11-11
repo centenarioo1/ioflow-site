@@ -11,22 +11,24 @@ function CallbackContent() {
   const [erro, setErro] = useState('');
 
   useEffect(() => {
+    let isMounted = true;
+
     const processarOAuth = async () => {
       try {
         const code = searchParams.get('code');
         let session = null;
 
-        // 🟢 Troca o code pela sessão usando o code_verifier salvo no localStorage do navegador
+        // 1. Tenta trocar o code por sessão via PKCE
         if (code) {
           const { data: exchangeData, error: exchangeError } = await supabase.auth.exchangeCodeForSession(code);
           if (!exchangeError && exchangeData?.session) {
             session = exchangeData.session;
           } else if (exchangeError) {
-            console.warn('Troca de code por sessão falhou:', exchangeError.message);
+            console.warn('⚠️ Troca inicial do code falhou:', exchangeError.message);
           }
         }
 
-        // Tenta recuperar a sessão ativa no cliente
+        // 2. Se a troca manual não retornou sessão, consulta a sessão ativa do Supabase
         if (!session) {
           const { data: sessionData } = await supabase.auth.getSession();
           session = sessionData?.session || null;
@@ -44,7 +46,7 @@ function CallbackContent() {
           throw new Error('O Google não forneceu um endereço de e-mail válido.');
         }
 
-        // Envia para o backend criar o perfil no Prisma e o cookie bioflow_session
+        // 3. Sincroniza com a API do backend
         const res = await fetch('/api/auth/session-login', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
@@ -60,7 +62,7 @@ function CallbackContent() {
           throw new Error(apiData.error || 'Erro ao sincronizar sessão no servidor.');
         }
 
-        // Grava no localStorage para compatibilidade das páginas da loja
+        // 4. Salva no localStorage
         localStorage.setItem('user_session', JSON.stringify({
           id: apiData.user.id,
           nome: apiData.user.nome,
@@ -69,19 +71,24 @@ function CallbackContent() {
         }));
 
         const redirect = searchParams.get('redirect') || '/dashboard';
-        router.push(redirect);
+        if (isMounted) router.push(redirect);
 
       } catch (err: any) {
         console.error('❌ [OAuth Callback] Erro no fluxo:', err);
-        setErro(err.message || 'Erro durante o login com o Google.');
-        
-        setTimeout(() => {
-          router.push(`/login?erro=oauth-failed&reason=${encodeURIComponent(err.message || 'error')}`);
-        }, 3000);
+        if (isMounted) {
+          setErro(err.message || 'Erro durante o login com o Google.');
+          setTimeout(() => {
+            router.push(`/login?erro=oauth-failed&reason=${encodeURIComponent(err.message || 'error')}`);
+          }, 3000);
+        }
       }
     };
 
     processarOAuth();
+
+    return () => {
+      isMounted = false;
+    };
   }, [router, searchParams]);
 
   return (
