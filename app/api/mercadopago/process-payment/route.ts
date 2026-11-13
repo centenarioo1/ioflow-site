@@ -2,6 +2,7 @@
 import { NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import { products, produtos } from '@/lib/products';
+import { enviarEmailPedidoCriado, enviarEmailConfirmacaoPedido } from '@/lib/email';
 
 export async function POST(req: Request) {
   try {
@@ -227,7 +228,6 @@ export async function POST(req: Request) {
       }
     }
 
-    // URL configurável via variável de ambiente MP_PAYMENTS_URL
     const mpApiEndpoint = process.env.MP_PAYMENTS_URL || 'https://api.mercadopago.com/v1/payments';
 
     const mpRes = await fetch(mpApiEndpoint, {
@@ -275,6 +275,54 @@ export async function POST(req: Request) {
     const transactionData = paymentData.point_of_interaction?.transaction_data;
     const qrCode = transactionData?.qr_code;
     const qrCodeBase64 = transactionData?.qr_code_base64;
+
+    // 🟢 7. DISPARO DO E-MAIL DE CONFIRMAÇÃO DO PEDIDO PARA A CAIXA DO CLIENTE
+    try {
+      const emailItems = validatedItems.map((it: any) => ({
+        nome: it.nome || it.name || 'Produto Bioflow',
+        quantidade: Number(it.quantity || 1),
+        preco: Number(it.price || it.preco || 0),
+      }));
+
+      const enderecoFormatado = [
+        `${address.rua || ''}, ${address.numero || ''}`,
+        address.complemento ? `(${address.complemento})` : '',
+        `${address.bairro || ''} - ${address.cidade || ''}/${address.estado || ''}`,
+        `CEP: ${address.cep || ''}`,
+      ]
+        .filter(Boolean)
+        .join(', ');
+
+      if (statusMP === 'approved') {
+        // Se aprovado na hora (ex: Cartão), envia a confirmação de pagamento
+        await enviarEmailConfirmacaoPedido({
+          emailCliente: userEmail,
+          nomeCliente: userName || 'Cultivador',
+          numeroPedido: orderId.slice(-6).toUpperCase(),
+          itens: emailItems,
+          valorTotal: totalOficial,
+          metodoPagamento: paymentMethodId === 'pix' ? 'PIX' : 'Cartão de Crédito',
+          enderecoEntrega: enderecoFormatado,
+        });
+      } else {
+        // Se pendente (ex: PIX), envia e-mail com instrução e chave Pix Copia e Cola
+        await enviarEmailPedidoCriado({
+          emailCliente: userEmail, // 🟢 E-mail dinâmico da conta do cliente!
+          nomeCliente: userName || 'Cultivador',
+          numeroPedido: orderId.slice(-6).toUpperCase(),
+          itens: emailItems,
+          valorTotal: totalOficial,
+          metodoPagamento: paymentMethodId === 'pix' ? 'PIX' : 'Cartão de Crédito',
+          codigoPix: qrCode || undefined,
+          linkPagamento: transactionData?.ticket_url || undefined,
+          enderecoEntrega: enderecoFormatado,
+        });
+      }
+
+      console.log(`📧 [Process Payment] E-mail enviado com sucesso para a caixa de: ${userEmail}`);
+    } catch (emailErr) {
+      console.error('❌ [Process Payment] Falha ao enviar e-mail:', emailErr);
+    }
 
     return NextResponse.json({
       success: true,
