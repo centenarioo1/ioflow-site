@@ -6,7 +6,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { getUsuarioLogado } from '@/lib/auth';
 import { mapOrderItems, serializeOrder } from '@/lib/orders';
 import { prisma } from '@/lib/prisma';
-import { enviarEmailConfirmacaoPedido } from '@/lib/email';
+import { enviarEmailPedidoCriado } from '@/lib/email';
 
 export async function POST(req: NextRequest) {
   try {
@@ -16,7 +16,7 @@ export async function POST(req: NextRequest) {
     }
 
     const body = await req.json();
-    const { items, frete, cupom, endereco, telefone, cpf, metodoPagamento } = body;
+    const { items, frete, cupom, endereco, telefone, cpf, metodoPagamento, codigoPix, linkPagamento } = body;
 
     if (!Array.isArray(items) || items.length === 0) {
       return NextResponse.json({ error: 'Carrinho vazio.' }, { status: 400 });
@@ -91,30 +91,36 @@ export async function POST(req: NextRequest) {
 
     const serialized = serializeOrder(order);
 
-    // 🟢 Disparo do e-mail de confirmação em segundo plano (não-bloqueante)
+    // 🟢 E-MAIL 1: Dispara o e-mail de "Pedido Criado / Aguardando Pagamento"
     if (authUser.email) {
-      const emailItems = mappedItems.map((it: any) => ({
-        nome: it.nome || it.title || it.name || 'Produto Bioflow',
-        quantidade: Number(it.quantity || it.quantidade || 1),
-        preco: Number(it.preco || it.price || 0),
-      }));
+      try {
+        const emailItems = mappedItems.map((it: any) => ({
+          nome: it.nome || it.title || it.name || 'Produto Bioflow',
+          quantidade: Number(it.quantity || it.quantidade || 1),
+          preco: Number(it.preco || it.price || 0),
+        }));
 
-      const enderecoFormatado = [
-        `${endereco?.rua || endereco?.street || ''}, ${endereco?.numero || endereco?.number || ''}`,
-        endereco?.complemento || endereco?.complement ? `(${endereco?.complemento || endereco?.complement})` : '',
-        `${endereco?.bairro || endereco?.neighborhood || ''} - ${endereco?.cidade || endereco?.city || ''}/${endereco?.uf || endereco?.estado || endereco?.state || ''}`,
-        `CEP: ${endereco?.cep || ''}`
-      ].filter(Boolean).join(', ');
+        const enderecoFormatado = [
+          `${endereco?.rua || endereco?.street || ''}, ${endereco?.numero || endereco?.number || ''}`,
+          endereco?.complemento || endereco?.complement ? `(${endereco?.complemento || endereco?.complement})` : '',
+          `${endereco?.bairro || endereco?.neighborhood || ''} - ${endereco?.cidade || endereco?.city || ''}/${endereco?.uf || endereco?.estado || endereco?.state || ''}`,
+          `CEP: ${endereco?.cep || ''}`
+        ].filter(Boolean).join(', ');
 
-      enviarEmailConfirmacaoPedido({
-        emailCliente: authUser.email,
-        nomeCliente: authUser.nome || 'Cultivador',
-        numeroPedido: String(serialized.orderNumber || order.id.slice(-6).toUpperCase()),
-        itens: emailItems,
-        valorTotal: total,
-        metodoPagamento: metodoPagamento || 'PIX / Cartão',
-        enderecoEntrega: enderecoFormatado,
-      }).catch((err) => console.error('⚠️ [API Order] Erro em segundo plano ao enviar e-mail:', err));
+        await enviarEmailPedidoCriado({
+          emailCliente: authUser.email,
+          nomeCliente: authUser.nome || 'Cultivador',
+          numeroPedido: String(serialized.orderNumber || order.id.slice(-6).toUpperCase()),
+          itens: emailItems,
+          valorTotal: total,
+          metodoPagamento: metodoPagamento || 'PIX / Cartão',
+          codigoPix: codigoPix || undefined,
+          linkPagamento: linkPagamento || undefined,
+          enderecoEntrega: enderecoFormatado,
+        });
+      } catch (errEmail) {
+        console.error('❌ [API Order] Erro ao disparar e-mail de criação:', errEmail);
+      }
     }
 
     return NextResponse.json({
