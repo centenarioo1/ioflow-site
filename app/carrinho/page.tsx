@@ -46,7 +46,7 @@ export default function CarrinhoPage() {
   // Cupom
   const [cupomInput, setCupomInput] = useState('');
   const [aplicandoCupom, setAplicandoCupom] = useState(false);
-  const [cupomAplicado, setCupomAplicado] = useState<{ codigo: string; desconto: number } | null>(null);
+  const [cupomAplicado, setCupomAplicado] = useState<{ codigo: string; desconto: number; freteGratis?: boolean } | null>(null);
   const [cupomErro, setCupomErro] = useState('');
 
   // Frete
@@ -118,11 +118,16 @@ export default function CarrinhoPage() {
 
   // Cálculos de Valores
   const subtotal = items.reduce((acc, it) => acc + ((it.preco || (it as any).price || 0) * it.quantity), 0);
-  const valorFrete = freteSelecionado ? freteSelecionado.valor : 0;
+  
+  // 🟢 Se o cupom aplicado for de frete grátis, o valor cobrado do frete vira R$ 0,00!
+  const valorFrete = cupomAplicado?.freteGratis 
+    ? 0 
+    : (freteSelecionado ? freteSelecionado.valor : 0);
+
   const valorDesconto = cupomAplicado ? cupomAplicado.desconto : 0;
   const total = Math.max(0, subtotal + valorFrete - valorDesconto);
 
-  // 🟢 REGRA DE BRINDE: O BRINDE SÓ APARECE SE O CUPOM FOR BIOMAIS5!
+  // 🟢 REGRA DE BRINDE: O BRINDE DE +5L SÓ APARECE SE O CUPOM FOR BIOMAIS5!
   const temDireitoABrinde = cupomAplicado?.codigo?.trim().toUpperCase() === 'BIOMAIS5';
 
   // CÁLCULO OFICIAL DE FRETE
@@ -203,14 +208,15 @@ export default function CarrinhoPage() {
     setCupomErro('');
     setCupomAplicado(null);
 
-    if (!cupomInput.trim()) return;
+    const cdg = cupomInput.toUpperCase().trim();
+    if (!cdg) return;
 
     setAplicandoCupom(true);
     try {
       const res = await fetch('/api/coupons/validate', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ codigo: cupomInput.toUpperCase().trim(), subtotal }),
+        body: JSON.stringify({ codigo: cdg, subtotal }),
       });
 
       const data = await res.json();
@@ -219,8 +225,9 @@ export default function CarrinhoPage() {
       }
 
       setCupomAplicado({
-        codigo: data.codigo || cupomInput.toUpperCase().trim(),
+        codigo: data.codigo || cdg,
         desconto: Number(data.desconto || 0),
+        freteGratis: !!data.freteGratis || cdg === 'FRETEGRATIS',
       });
     } catch (err: any) {
       setCupomErro(err.message || 'Cupom inválido ou expirado.');
@@ -279,7 +286,7 @@ export default function CarrinhoPage() {
         userCpf: userData.cpf || '00000000000',
         cupomCodigo: cupomAplicado?.codigo || null,
         observacoes: observacoes.trim() || null,
-        shippingCost: valorFrete,
+        shippingCost: freteSelecionado?.valor || 0,
         shippingServiceName: freteSelecionado?.nome || 'Padrão',
         address: { cep: cep.replace(/\D/g, ''), rua, numero, complemento, bairro, cidade, estado }
       };
@@ -549,7 +556,9 @@ export default function CarrinhoPage() {
                             <p style={{ fontSize: 11, color: '#6b7280', margin: '2px 0 0' }}>Prazo: {opcao.prazo} dias úteis</p>
                           </div>
                         </div>
-                        <span style={{ fontWeight: 800, color: '#15803d' }}>{opcao.valor === 0 ? 'Grátis' : fmt(opcao.valor)}</span>
+                        <span style={{ fontWeight: 800, color: '#15803d' }}>
+                          {cupomAplicado?.freteGratis ? 'Grátis' : (opcao.valor === 0 ? 'Grátis' : fmt(opcao.valor))}
+                        </span>
                       </label>
                     ))}
                   </div>
@@ -611,7 +620,7 @@ export default function CarrinhoPage() {
                 <form onSubmit={handleAplicarCupom} style={{ display: 'flex', gap: 8 }}>
                   <input 
                     type="text" 
-                    placeholder="Digite seu cupom (Ex: BIOMAIS5)" 
+                    placeholder="Digite seu cupom (Ex: BIOMAIS5 ou FRETEGRATIS)" 
                     value={cupomInput}
                     onChange={(e) => setCupomInput(e.target.value)}
                     style={{ flex: 1, padding: '10px 12px', borderRadius: 8, border: '1px solid #d1d5db', fontSize: 13, outline: 'none', textTransform: 'uppercase' }}
@@ -627,7 +636,7 @@ export default function CarrinhoPage() {
                 {cupomErro && <p style={{ fontSize: 12, color: '#b91c1c', marginTop: 8, fontWeight: 600 }}>{cupomErro}</p>}
                 {cupomAplicado && (
                   <p style={{ fontSize: 12, color: '#15803d', marginTop: 8, fontWeight: 700 }}>
-                    ✓ Cupom {cupomAplicado.codigo} aplicado com sucesso!
+                    ✓ Cupom {cupomAplicado.codigo} aplicado com sucesso! {cupomAplicado.freteGratis ? '(Frete Grátis Ativado)' : ''}
                   </p>
                 )}
               </div>
@@ -742,7 +751,15 @@ export default function CarrinhoPage() {
 
                     <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 13, color: '#6b7280', marginBottom: 12 }}>
                       <span>Frete ({freteSelecionado?.nome || 'A calcular'}):</span>
-                      <span>{valorFrete > 0 ? fmt(valorFrete) : (freteSelecionado ? 'Grátis' : 'A calcular')}</span>
+                      <span>
+                        {cupomAplicado?.freteGratis ? (
+                          <strong style={{ color: '#15803d' }}>Grátis (Cupom {cupomAplicado.codigo})</strong>
+                        ) : valorFrete > 0 ? (
+                          fmt(valorFrete)
+                        ) : (
+                          freteSelecionado ? 'Grátis' : 'A calcular'
+                        )}
+                      </span>
                     </div>
 
                     <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 17, fontWeight: 900, color: '#0d2410', borderTop: '1px solid #e5e7eb', paddingTop: 12 }}>

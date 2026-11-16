@@ -2,7 +2,7 @@
 import { NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import { products, produtos } from '@/lib/products';
-import { enviarEmailPedidoCriado, enviarEmailConfirmacaoPedido } from '@/lib/email';
+import { enviarEmailPedidoCriado, enviarEmailConfirmacaoPedido, enviarEmailAdminNovoPedido } from '@/lib/email';
 
 export async function POST(req: Request) {
   try {
@@ -24,6 +24,7 @@ export async function POST(req: Request) {
       userPhone,
       userCpf,
       cupomCodigo,
+      observacoes,
       shippingCost = 0,
       shippingServiceName = 'Padrão',
       address,
@@ -91,11 +92,13 @@ export async function POST(req: Request) {
     // 2. REVALIDAÇÃO DE CUPOM NO BANCO DE DADOS
     let cupomId: string | undefined = undefined;
     let valorDesconto = 0;
+    let ehFreteGratis = false;
 
     if (cupomCodigo) {
       try {
+        const cdgUpper = String(cupomCodigo).toUpperCase().trim();
         const cupom = await prisma.cupom.findUnique({
-          where: { codigo: String(cupomCodigo).toUpperCase().trim() },
+          where: { codigo: cdgUpper },
         });
 
         const expirado = cupom?.dataExpiracao ? new Date() > cupom.dataExpiracao : false;
@@ -106,6 +109,8 @@ export async function POST(req: Request) {
           cupomId = cupom.id;
           const tipo = (cupom.tipo || '').toLowerCase();
           const ehPercentual = tipo === 'percentual' || tipo === 'porcentagem';
+          ehFreteGratis = tipo === 'frete_gratis' || cdgUpper === 'FRETEGRATIS';
+
           valorDesconto = ehPercentual
             ? (subtotalOficial * cupom.valor) / 100
             : cupom.valor;
@@ -116,7 +121,8 @@ export async function POST(req: Request) {
       }
     }
 
-    const totalOficial = Math.max(0.01, Number((subtotalOficial - valorDesconto + Number(shippingCost)).toFixed(2)));
+    const valorFreteCobrado = ehFreteGratis ? 0 : Number(shippingCost || 0);
+    const totalOficial = Math.max(0.01, Number((subtotalOficial - valorDesconto + valorFreteCobrado).toFixed(2)));
 
     // 3. VALIDAÇÃO DE USER_ID
     let validUserId: string | null = null;
@@ -276,12 +282,13 @@ export async function POST(req: Request) {
     const qrCode = transactionData?.qr_code;
     const qrCodeBase64 = transactionData?.qr_code_base64;
 
-    // 🟢 7. DISPARO DO E-MAIL DE CONFIRMAÇÃO DO PEDIDO PARA A CAIXA DO CLIENTE
+    // 🟢 7. DISPARO DOS E-MAILS DE NOTIFICAÇÃO
     try {
       const emailItems = validatedItems.map((it: any) => ({
         nome: it.nome || it.name || 'Produto Bioflow',
         quantidade: Number(it.quantity || 1),
         preco: Number(it.price || it.preco || 0),
+        variacao: it.variacao || it.size || '',
       }));
 
       const enderecoFormatado = [
@@ -294,7 +301,6 @@ export async function POST(req: Request) {
         .join(', ');
 
       if (statusMP === 'approved') {
-        // Se aprovado na hora (ex: Cartão), envia a confirmação de pagamento
         await enviarEmailConfirmacaoPedido({
           emailCliente: userEmail,
           nomeCliente: userName || 'Cultivador',
@@ -305,9 +311,8 @@ export async function POST(req: Request) {
           enderecoEntrega: enderecoFormatado,
         });
       } else {
-        // Se pendente (ex: PIX), envia e-mail com instrução e chave Pix Copia e Cola
         await enviarEmailPedidoCriado({
-          emailCliente: userEmail, // 🟢 E-mail dinâmico da conta do cliente!
+          emailCliente: userEmail,
           nomeCliente: userName || 'Cultivador',
           numeroPedido: orderId.slice(-6).toUpperCase(),
           itens: emailItems,
@@ -319,9 +324,23 @@ export async function POST(req: Request) {
         });
       }
 
-      console.log(`📧 [Process Payment] E-mail enviado com sucesso para a caixa de: ${userEmail}`);
+      await enviarEmailAdminNovoPedido({
+        numeroPedido: orderId.slice(-6).toUpperCase(),
+        nomeCliente: userName,
+        emailCliente: userEmail,
+        telefoneCliente: userPhone,
+        cpfCliente: userCpf,
+        itens: emailItems,
+        valorTotal: totalOficial,
+        metodoPagamento: paymentMethodId === 'pix' ? 'PIX' : 'Cartão de Crédito',
+        enderecoEntrega: enderecoFormatado,
+        cupomCodigo: cupomCodigo || undefined,
+        observacoes: observacoes || undefined,
+      });
+
+      console.log(`📧 [Process Payment] E-mails disparados para ${userEmail} e Admin.`);
     } catch (emailErr) {
-      console.error('❌ [Process Payment] Falha ao enviar e-mail:', emailErr);
+      console.error('❌ [Process Payment] Falha ao enviar e-mails:', emailErr);
     }
 
     return NextResponse.json({
