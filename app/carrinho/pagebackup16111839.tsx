@@ -7,13 +7,20 @@ import { useRouter } from 'next/navigation';
 import { useCartStore } from '@/store/useCartStore';
 import { 
   ShoppingBag, Trash2, ArrowLeft, ShieldCheck, Tag, Check, Truck, 
-  MapPin, Loader2, CreditCard, QrCode, Copy, CheckCircle2, Lock, AlertCircle
+  MapPin, Loader2, CreditCard, QrCode, Copy, CheckCircle2, Lock, Gift, MessageSquare
 } from 'lucide-react';
 
 const fmt = (v?: number | null) => {
   if (v === undefined || v === null || isNaN(v)) return 'R$ 0,00';
   return `R$ ${v.toFixed(2).replace('.', ',')}`;
 };
+
+// 🟢 3 OPÇÕES BASE DE SUBSTRATO PARA O CUPOM BIOMAIS5
+const BRINDES_OPCOES = [
+  { id: 'brinde-substrato-rico', nomeBase: 'Substrato Rico Bioflow', descricao: 'Nutrição completa e aeração ideal' },
+  { id: 'brinde-super-solo', nomeBase: 'Super Solo Vivo Bioflow', descricao: 'Orgânico pronto e super ativado' },
+  { id: 'brinde-coco-perlita', nomeBase: 'Fibra de Coco & Perlita', descricao: 'Drenagem máxima e leveza' },
+];
 
 export default function CarrinhoPage() {
   const router = useRouter();
@@ -31,11 +38,15 @@ export default function CarrinhoPage() {
   const [cidade, setCidade] = useState('');
   const [estado, setEstado] = useState('');
   const [complemento, setComplemento] = useState('');
+  const [observacoes, setObservacoes] = useState('');
+
+  // Brinde Escolhido (ID da opção)
+  const [brindeEscolhido, setBrindeEscolhido] = useState<string>('brinde-substrato-rico');
 
   // Cupom
   const [cupomInput, setCupomInput] = useState('');
   const [aplicandoCupom, setAplicandoCupom] = useState(false);
-  const [cupomAplicado, setCupomAplicado] = useState<{ codigo: string; desconto: number } | null>(null);
+  const [cupomAplicado, setCupomAplicado] = useState<{ codigo: string; desconto: number; freteGratis?: boolean } | null>(null);
   const [cupomErro, setCupomErro] = useState('');
 
   // Frete
@@ -105,11 +116,41 @@ export default function CarrinhoPage() {
     );
   }
 
-  // Cálculos de Valores
+  // CÁLCULO DE VALORES
   const subtotal = items.reduce((acc, it) => acc + ((it.preco || (it as any).price || 0) * it.quantity), 0);
-  const valorFrete = freteSelecionado ? freteSelecionado.valor : 0;
+
+  // 🟢 CÁLCULO DINÂMICO DE LITROS NO CARRINHO PARA O CUPOM BIOMAIS5
+  const totalLitrosSubstrato = items.reduce((acc, item) => {
+    const sizeStr = String(item.variacao || item.size || '').toUpperCase();
+    const nameStr = String(item.nome || item.name || '').toUpperCase();
+    const match = sizeStr.match(/(\d+)\s*L/i) || sizeStr.match(/(\d+)\s*LITRO/i) || nameStr.match(/(\d+)\s*L/i);
+    let litrosUnidade = match ? parseInt(match[1], 10) : 0;
+
+    if (litrosUnidade === 0) {
+      if (sizeStr.includes('50')) litrosUnidade = 50;
+      else if (sizeStr.includes('20')) litrosUnidade = 20;
+      else if (sizeStr.includes('10')) litrosUnidade = 10;
+      else if (sizeStr.includes('5')) litrosUnidade = 5;
+    }
+
+    const qtd = Number(item.quantity || 1);
+    return acc + (litrosUnidade * qtd);
+  }, 0);
+
+  // A cada 20 Litros no carrinho ganha +5 Litros de brinde
+  const fatorBrinde = Math.max(1, Math.floor(totalLitrosSubstrato / 20));
+  const litrosBrindeTotal = fatorBrinde * 5;
+
+  // FRETE & DESCONTO
+  const valorFrete = cupomAplicado?.freteGratis 
+    ? 0 
+    : (freteSelecionado ? freteSelecionado.valor : 0);
+
   const valorDesconto = cupomAplicado ? cupomAplicado.desconto : 0;
   const total = Math.max(0, subtotal + valorFrete - valorDesconto);
+
+  // 🟢 REGRA DE BRINDE: SÓ APARECE SE O CUPOM FOR BIOMAIS5
+  const temDireitoABrinde = cupomAplicado?.codigo?.trim().toUpperCase() === 'BIOMAIS5';
 
   // CÁLCULO OFICIAL DE FRETE
   const handleCalcularFrete = async (e?: React.FormEvent) => {
@@ -126,7 +167,6 @@ export default function CarrinhoPage() {
 
     setCalculandoFrete(true);
 
-    // Auto-preenchimento do Endereço via ViaCEP
     try {
       const viaCepRes = await fetch(`https://viacep.com.br/ws/${cepLimpo}/json/`);
       const viaCepData = await viaCepRes.json();
@@ -140,7 +180,6 @@ export default function CarrinhoPage() {
       console.warn('Erro ao consultar ViaCEP:', err);
     }
 
-    // Chamada oficial da cotação
     try {
       const res = await fetch('/api/shipping/calculate', {
         method: 'POST',
@@ -191,14 +230,15 @@ export default function CarrinhoPage() {
     setCupomErro('');
     setCupomAplicado(null);
 
-    if (!cupomInput.trim()) return;
+    const cdg = cupomInput.toUpperCase().trim();
+    if (!cdg) return;
 
     setAplicandoCupom(true);
     try {
       const res = await fetch('/api/coupons/validate', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ codigo: cupomInput.toUpperCase().trim(), subtotal }),
+        body: JSON.stringify({ codigo: cdg, subtotal }),
       });
 
       const data = await res.json();
@@ -207,8 +247,9 @@ export default function CarrinhoPage() {
       }
 
       setCupomAplicado({
-        codigo: data.codigo || cupomInput.toUpperCase(),
+        codigo: data.codigo || cdg,
         desconto: Number(data.desconto || 0),
+        freteGratis: !!data.freteGratis || cdg === 'FRETEGRATIS',
       });
     } catch (err: any) {
       setCupomErro(err.message || 'Cupom inválido ou expirado.');
@@ -234,15 +275,30 @@ export default function CarrinhoPage() {
 
     setLoadingCheckout(true);
     try {
+      const mappedItemsPayload = items.map(it => ({
+        id: it.productId || it.variantId || it.id,
+        name: it.nome || it.name,
+        price: Number(it.preco || it.price || 0),
+        quantity: Number(it.quantity),
+        size: it.variacao || it.size || 'Padrão',
+        image: it.imagem || it.image || '',
+      }));
+
+      // 🟢 Anexa o volume total de brinde acumulado (+15L, +10L, +5L) do tipo escolhido
+      if (temDireitoABrinde) {
+        const brindeObj = BRINDES_OPCOES.find(b => b.id === brindeEscolhido) || BRINDES_OPCOES[0];
+        mappedItemsPayload.push({
+          id: `${brindeObj.id}-${litrosBrindeTotal}l`,
+          name: `+${litrosBrindeTotal}L ${brindeObj.nomeBase}`,
+          price: 0,
+          quantity: 1,
+          size: `+${litrosBrindeTotal} LITROS BRINDE`,
+          image: '/products/substrato.jpg',
+        });
+      }
+
       const checkoutPayload = {
-        items: items.map(it => ({
-          id: it.productId || it.variantId || it.id,
-          name: it.nome || it.name,
-          price: Number(it.preco || it.price || 0),
-          quantity: Number(it.quantity),
-          size: it.variacao || it.size || 'Padrão',
-          image: it.imagem || it.image || '',
-        })),
+        items: mappedItemsPayload,
         paymentMethodId: metodoPagamento,
         installments: metodoPagamento === 'cartao' ? parcelas : 1,
         userId: userData.id || null,
@@ -251,7 +307,8 @@ export default function CarrinhoPage() {
         userPhone: userData.telefone || '11999999999',
         userCpf: userData.cpf || '00000000000',
         cupomCodigo: cupomAplicado?.codigo || null,
-        shippingCost: valorFrete,
+        observacoes: observacoes.trim() || null,
+        shippingCost: freteSelecionado?.valor || 0,
         shippingServiceName: freteSelecionado?.nome || 'Padrão',
         address: { cep: cep.replace(/\D/g, ''), rua, numero, complemento, bairro, cidade, estado }
       };
@@ -368,10 +425,10 @@ export default function CarrinhoPage() {
           /* ESTRUTURA DE 2 COLUNAS */
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(320px, 1fr))', gap: 24, alignItems: 'start' }}>
             
-            {/* COLUNA 1: PRODUTOS, ENDEREÇO E FRETE */}
+            {/* COLUNA 1: PRODUTOS, BRINDE ACUMULADO, ENDEREÇO E FRETE */}
             <div style={{ display: 'flex', flexDirection: 'column', gap: 20 }}>
               
-              {/* LISTA DE PRODUTOS COMPLETA COM MINIATURAS VISÍVEIS */}
+              {/* LISTA DE PRODUTOS COMPLETA */}
               <div style={{ background: 'white', borderRadius: 20, border: '1px solid #e7e2d6', padding: 20 }}>
                 <h2 style={{ fontSize: 15, fontWeight: 900, color: '#0d2410', marginBottom: 16, display: 'flex', alignItems: 'center', gap: 8 }}>
                   <ShoppingBag size={18} color="#15803d" /> Itens no Carrinho ({items.length})
@@ -417,7 +474,56 @@ export default function CarrinhoPage() {
                 </div>
               </div>
 
-              {/* CARD DE CÁLCULO DE FRETE RESTAURADO E OFICIAL */}
+              {/* 🟢 CARD COMPACTO DE SELEÇÃO DE BRINDE ACUMULADO (CUPOM BIOMAIS5) */}
+              {temDireitoABrinde && (
+                <div style={{ background: '#f0fdf4', border: '1.5px dashed #16a34a', borderRadius: 14, padding: 14 }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 4 }}>
+                    <Gift size={18} color="#16a34a" />
+                    <h3 style={{ fontSize: 13.5, fontWeight: 900, color: '#15803d', margin: 0 }}>
+                      Cupom BIOMAIS5 Ativo! Você ganhou +{litrosBrindeTotal}L de Substrato Grátis!
+                    </h3>
+                  </div>
+                  <p style={{ fontSize: 11.5, color: '#166534', margin: '0 0 10px' }}>
+                    Acúmulo de +5L a cada 20L no carrinho ({totalLitrosSubstrato}L detectados). Escolha 1 tipo para receber seus +{litrosBrindeTotal}L:
+                  </p>
+
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+                    {BRINDES_OPCOES.map((b) => (
+                      <button
+                        key={b.id}
+                        type="button"
+                        onClick={() => setBrindeEscolhido(b.id)}
+                        style={{
+                          background: brindeEscolhido === b.id ? '#ffffff' : 'transparent',
+                          border: brindeEscolhido === b.id ? '2px solid #15803d' : '1px solid #bbf7d0',
+                          borderRadius: 8,
+                          padding: '8px 10px',
+                          textAlign: 'left',
+                          cursor: 'pointer',
+                          display: 'flex',
+                          alignItems: 'center',
+                          justifyContent: 'space-between',
+                          transition: 'all 0.15s ease',
+                        }}
+                      >
+                        <div>
+                          <div style={{ fontSize: 12, fontWeight: 800, color: brindeEscolhido === b.id ? '#15803d' : '#1f2937' }}>
+                            +{litrosBrindeTotal}L {b.nomeBase}
+                          </div>
+                          <div style={{ fontSize: 10.5, color: '#6b7280' }}>
+                            {b.descricao}
+                          </div>
+                        </div>
+                        <span style={{ fontSize: 11, fontWeight: 800, color: brindeEscolhido === b.id ? '#15803d' : '#9ca3af' }}>
+                          {brindeEscolhido === b.id ? '✓ Selecionado' : 'Selecionar'}
+                        </span>
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              {/* CARD DE CÁLCULO DE FRETE */}
               <div style={{ background: 'white', border: '1px solid #e7e2d6', borderRadius: 20, padding: 20 }}>
                 <h3 style={{ fontSize: 14, fontWeight: 900, marginBottom: 10, display: 'flex', alignItems: 'center', gap: 6, color: '#0d2410' }}>
                   <Truck size={16} color="#15803d" /> Opções de Entrega (Melhor Envio)
@@ -472,14 +578,16 @@ export default function CarrinhoPage() {
                             <p style={{ fontSize: 11, color: '#6b7280', margin: '2px 0 0' }}>Prazo: {opcao.prazo} dias úteis</p>
                           </div>
                         </div>
-                        <span style={{ fontWeight: 800, color: '#15803d' }}>{opcao.valor === 0 ? 'Grátis' : fmt(opcao.valor)}</span>
+                        <span style={{ fontWeight: 800, color: '#15803d' }}>
+                          {cupomAplicado?.freteGratis ? 'Grátis' : (opcao.valor === 0 ? 'Grátis' : fmt(opcao.valor))}
+                        </span>
                       </label>
                     ))}
                   </div>
                 )}
               </div>
 
-              {/* FORMULÁRIO DE ENDEREÇO DE ENTREGA */}
+              {/* FORMULÁRIO DE ENDEREÇO & OBSERVAÇÕES */}
               <div style={{ background: 'white', borderRadius: 20, border: '1px solid #e7e2d6', padding: 20 }}>
                 <h2 style={{ fontSize: 15, fontWeight: 900, color: '#0d2410', marginBottom: 16, display: 'flex', alignItems: 'center', gap: 8 }}>
                   <MapPin size={18} color="#15803d" /> Endereço Completo de Entrega
@@ -510,6 +618,19 @@ export default function CarrinhoPage() {
                     <label style={{ fontSize: 11.5, fontWeight: 800, color: '#4b5563', display: 'block', marginBottom: 4 }}>Cidade / UF *</label>
                     <input type="text" value={cidade ? `${cidade}/${estado}` : ''} onChange={e => setCidade(e.target.value)} style={{ width: '100%', padding: '9px 12px', borderRadius: 8, border: '1px solid #d1d5db', fontSize: 13 }} required />
                   </div>
+
+                  {/* CAMPO DE OBSERVAÇÕES DO PEDIDO */}
+                  <div style={{ gridColumn: 'span 2', marginTop: 4 }}>
+                    <label style={{ fontSize: 11.5, fontWeight: 800, color: '#4b5563', display: 'flex', alignItems: 'center', gap: 4, marginBottom: 4 }}>
+                      <MessageSquare size={14} color="#15803d" /> Observações para Entrega / Pedido (Opcional)
+                    </label>
+                    <textarea 
+                      value={observacoes} 
+                      onChange={e => setObservacoes(e.target.value)} 
+                      placeholder="Ex: Deixar com o porteiro, horário preferencial, ou mensagem para a equipe..." 
+                      style={{ width: '100%', height: 60, padding: '8px 12px', borderRadius: 8, border: '1px solid #d1d5db', fontSize: 12.5, fontFamily: 'inherit', resize: 'none' }}
+                    />
+                  </div>
                 </div>
               </div>
 
@@ -521,7 +642,7 @@ export default function CarrinhoPage() {
                 <form onSubmit={handleAplicarCupom} style={{ display: 'flex', gap: 8 }}>
                   <input 
                     type="text" 
-                    placeholder="Código do cupom (Ex: BOASVINDAS)" 
+                    placeholder="Digite seu cupom AQUI :)" 
                     value={cupomInput}
                     onChange={(e) => setCupomInput(e.target.value)}
                     style={{ flex: 1, padding: '10px 12px', borderRadius: 8, border: '1px solid #d1d5db', fontSize: 13, outline: 'none', textTransform: 'uppercase' }}
@@ -537,7 +658,7 @@ export default function CarrinhoPage() {
                 {cupomErro && <p style={{ fontSize: 12, color: '#b91c1c', marginTop: 8, fontWeight: 600 }}>{cupomErro}</p>}
                 {cupomAplicado && (
                   <p style={{ fontSize: 12, color: '#15803d', marginTop: 8, fontWeight: 700 }}>
-                    ✓ Cupom {cupomAplicado.codigo} aplicado com sucesso!
+                    ✓ Cupom {cupomAplicado.codigo} aplicado com sucesso! {cupomAplicado.freteGratis ? '(Frete Grátis Ativado)' : ''}
                   </p>
                 )}
               </div>
@@ -652,7 +773,15 @@ export default function CarrinhoPage() {
 
                     <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 13, color: '#6b7280', marginBottom: 12 }}>
                       <span>Frete ({freteSelecionado?.nome || 'A calcular'}):</span>
-                      <span>{valorFrete > 0 ? fmt(valorFrete) : (freteSelecionado ? 'Grátis' : 'A calcular')}</span>
+                      <span>
+                        {cupomAplicado?.freteGratis ? (
+                          <strong style={{ color: '#15803d' }}>Grátis (Cupom {cupomAplicado.codigo})</strong>
+                        ) : valorFrete > 0 ? (
+                          fmt(valorFrete)
+                        ) : (
+                          freteSelecionado ? 'Grátis' : 'A calcular'
+                        )}
+                      </span>
                     </div>
 
                     <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 17, fontWeight: 900, color: '#0d2410', borderTop: '1px solid #e5e7eb', paddingTop: 12 }}>

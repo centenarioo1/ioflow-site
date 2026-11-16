@@ -5,8 +5,8 @@ import React, { useState, useEffect } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { useCartStore } from '@/store/useCartStore';
-import { 
-  ShoppingBag, Trash2, ArrowLeft, ShieldCheck, Tag, Check, Truck, 
+import {
+  ShoppingBag, Trash2, ArrowLeft, ShieldCheck, Tag, Check, Truck,
   MapPin, Loader2, CreditCard, QrCode, Copy, CheckCircle2, Lock, Gift, MessageSquare
 } from 'lucide-react';
 
@@ -15,12 +15,37 @@ const fmt = (v?: number | null) => {
   return `R$ ${v.toFixed(2).replace('.', ',')}`;
 };
 
-// 🟢 3 OPÇÕES BASE DE SUBSTRATO PARA O CUPOM BIOMAIS5
+// Estilos reutilizados
+const cardStyle: React.CSSProperties = { background: 'white', borderRadius: 20, border: '1px solid #e7e2d6', padding: 20 };
+const h2Style: React.CSSProperties = { fontSize: 15, fontWeight: 900, color: '#0d2410', marginBottom: 16, display: 'flex', alignItems: 'center', gap: 8 };
+const h3Style: React.CSSProperties = { fontSize: 14, fontWeight: 900, marginBottom: 10, display: 'flex', alignItems: 'center', gap: 6, color: '#0d2410' };
+const labelStyle: React.CSSProperties = { fontSize: 11.5, fontWeight: 800, color: '#4b5563', display: 'block', marginBottom: 4 };
+const inputStyle: React.CSSProperties = { width: '100%', padding: '9px 12px', borderRadius: 8, border: '1px solid #d1d5db', fontSize: 13 };
+const darkBtn: React.CSSProperties = { background: '#0d2410', color: 'white', border: 'none', borderRadius: 8, padding: '0 16px', fontSize: 12, fontWeight: 800, cursor: 'pointer' };
+const payBtn = (ativo: boolean): React.CSSProperties => ({
+  padding: '12px 14px',
+  borderRadius: 12,
+  border: ativo ? '2px solid #15803d' : '1px solid #d1d5db',
+  background: ativo ? '#f0fdf4' : 'white',
+  color: ativo ? '#15803d' : '#4b5563',
+  fontWeight: 800,
+  fontSize: 13,
+  cursor: 'pointer',
+  display: 'flex',
+  alignItems: 'center',
+  justifyContent: 'center',
+  gap: 8,
+});
+
+// 3 OPÇÕES BASE DE SUBSTRATO PARA O CUPOM BIOMAIS5
 const BRINDES_OPCOES = [
   { id: 'brinde-substrato-rico', nomeBase: 'Substrato Rico Bioflow', descricao: 'Nutrição completa e aeração ideal' },
   { id: 'brinde-super-solo', nomeBase: 'Super Solo Vivo Bioflow', descricao: 'Orgânico pronto e super ativado' },
   { id: 'brinde-coco-perlita', nomeBase: 'Fibra de Coco & Perlita', descricao: 'Drenagem máxima e leveza' },
 ];
+
+type OpcaoFrete = { id: string; nome: string; valor: number; prazo: number };
+type FreteSelecionado = { id: string; nome: string; valor: number };
 
 export default function CarrinhoPage() {
   const router = useRouter();
@@ -51,8 +76,8 @@ export default function CarrinhoPage() {
 
   // Frete
   const [calculandoFrete, setCalculandoFrete] = useState(false);
-  const [freteOpcoes, setFreteOpcoes] = useState<{ nome: string; valor: number; prazo: number }[]>([]);
-  const [freteSelecionado, setFreteSelecionado] = useState<{ nome: string; valor: number } | null>(null);
+  const [freteOpcoes, setFreteOpcoes] = useState<OpcaoFrete[]>([]);
+  const [freteSelecionado, setFreteSelecionado] = useState<FreteSelecionado | null>(null);
   const [freteErro, setFreteErro] = useState('');
 
   // Forma de Pagamento Transparente
@@ -65,9 +90,11 @@ export default function CarrinhoPage() {
   const [copiadoPix, setCopiadoPix] = useState(false);
 
   // Dados do Cartão de Crédito
+  // ATENÇÃO: estes dados NÃO são enviados no payload. Para cartão com Mercado Pago é preciso
+  // tokenizar pelo SDK (MercadoPago.js) e enviar o `token` ao servidor. Nunca envie o número do cartão cru.
   const [numeroCartao, setNumeroCartao] = useState('');
   const [nomeCartao, setNomeCartao] = useState('');
-  const [valocidadeCartao, setValocidadeCartao] = useState('');
+  const [validadeCartao, setValidadeCartao] = useState('');
   const [cvvCartao, setCvvCartao] = useState('');
   const [parcelas, setParcelas] = useState(1);
 
@@ -108,6 +135,13 @@ export default function CarrinhoPage() {
     }
   }, []);
 
+  // Se o carrinho ou o CEP mudarem, o frete calculado deixa de valer: zera e exige novo cálculo.
+  useEffect(() => {
+    setFreteOpcoes([]);
+    setFreteSelecionado(null);
+    setFreteErro('');
+  }, [items, cep]);
+
   if (!isMounted) {
     return (
       <div style={{ minHeight: '100vh', background: '#f7f4ee', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
@@ -119,7 +153,7 @@ export default function CarrinhoPage() {
   // CÁLCULO DE VALORES
   const subtotal = items.reduce((acc, it) => acc + ((it.preco || (it as any).price || 0) * it.quantity), 0);
 
-  // 🟢 CÁLCULO DINÂMICO DE LITROS NO CARRINHO PARA O CUPOM BIOMAIS5
+  // CÁLCULO DINÂMICO DE LITROS NO CARRINHO PARA O CUPOM BIOMAIS5
   const totalLitrosSubstrato = items.reduce((acc, item) => {
     const sizeStr = String(item.variacao || item.size || '').toUpperCase();
     const nameStr = String(item.nome || item.name || '').toUpperCase();
@@ -137,22 +171,20 @@ export default function CarrinhoPage() {
     return acc + (litrosUnidade * qtd);
   }, 0);
 
-  // A cada 20 Litros no carrinho ganha +5 Litros de brinde
-  const fatorBrinde = Math.max(1, Math.floor(totalLitrosSubstrato / 20));
-  const litrosBrindeTotal = fatorBrinde * 5;
+  // A cada 20 Litros COMPLETOS no carrinho ganha +5 Litros de brinde
+  const litrosBrindeTotal = Math.floor(totalLitrosSubstrato / 20) * 5;
+  const litrosFaltandoParaBrinde = 20 - (totalLitrosSubstrato % 20);
 
   // FRETE & DESCONTO
-  const valorFrete = cupomAplicado?.freteGratis 
-    ? 0 
-    : (freteSelecionado ? freteSelecionado.valor : 0);
-
+  const valorFrete = cupomAplicado?.freteGratis ? 0 : (freteSelecionado ? freteSelecionado.valor : 0);
   const valorDesconto = cupomAplicado ? cupomAplicado.desconto : 0;
   const total = Math.max(0, subtotal + valorFrete - valorDesconto);
 
-  // 🟢 REGRA DE BRINDE: SÓ APARECE SE O CUPOM FOR BIOMAIS5
-  const temDireitoABrinde = cupomAplicado?.codigo?.trim().toUpperCase() === 'BIOMAIS5';
+  // REGRA DE BRINDE: SÓ APARECE SE O CUPOM FOR BIOMAIS5 E HOUVER AO MENOS 20L
+  const cupomBiomais5 = cupomAplicado?.codigo?.trim().toUpperCase() === 'BIOMAIS5';
+  const temDireitoABrinde = cupomBiomais5 && litrosBrindeTotal > 0;
 
-  // CÁLCULO OFICIAL DE FRETE
+  // CÁLCULO OFICIAL DE FRETE (sem fallback inventado: se falhar, mostra o erro)
   const handleCalcularFrete = async (e?: React.FormEvent) => {
     if (e) e.preventDefault();
     setFreteErro('');
@@ -192,33 +224,23 @@ export default function CarrinhoPage() {
         throw new Error(data.error || 'Erro ao calcular frete.');
       }
 
-      const opcoesCalculadas = data.opcoes || [];
-      setFreteOpcoes(opcoesCalculadas);
-      
-      if (opcoesCalculadas.length > 0) {
-        const primeiraOpcao = opcoesCalculadas[0];
-        if (primeiraOpcao) {
-          setFreteSelecionado({
-            nome: primeiraOpcao.nome,
-            valor: primeiraOpcao.valor,
-          });
-        }
-      } else {
-        setFreteErro('Nenhuma opção de frete disponível para este CEP.');
+      // Só aceita opções com valor real e ordena da mais barata para a mais cara
+      const opcoesCalculadas: OpcaoFrete[] = (data.opcoes || [])
+        .filter((o: OpcaoFrete) => Number(o.valor) > 0)
+        .sort((a: OpcaoFrete, b: OpcaoFrete) => a.valor - b.valor);
+
+      if (opcoesCalculadas.length === 0) {
+        if (data.motivos) console.warn('Motivos de indisponibilidade de frete:', data.motivos);
+        setFreteErro('Nenhuma opção de frete disponível para este CEP. Entre em contato com a loja para combinar a entrega.');
+        return;
       }
+
+      setFreteOpcoes(opcoesCalculadas);
+      const primeira = opcoesCalculadas[0];
+      setFreteSelecionado({ id: primeira.id, nome: primeira.nome, valor: primeira.valor });
     } catch (err: any) {
-      console.warn('Usando fallback de frete offline:', err);
-      const fallbackOptions = [
-        { nome: 'Correios (SEDEX)', valor: subtotal > 150 ? 0 : 22.50, prazo: 3 },
-        { nome: 'Correios (PAC)', valor: subtotal > 150 ? 0 : 14.90, prazo: 7 },
-        { nome: 'Jadlog (.COM)', valor: subtotal > 150 ? 0 : 18.20, prazo: 5 },
-        { nome: 'Jadlog (PACKAGE)', valor: subtotal > 150 ? 0 : 16.50, prazo: 6 }
-      ];
-      setFreteOpcoes(fallbackOptions);
-      setFreteSelecionado({ 
-        nome: fallbackOptions[0].nome, 
-        valor: fallbackOptions[0].valor 
-      });
+      console.error('Erro ao calcular frete:', err);
+      setFreteErro(err.message || 'Não foi possível calcular o frete agora. Tente novamente.');
     } finally {
       setCalculandoFrete(false);
     }
@@ -249,7 +271,7 @@ export default function CarrinhoPage() {
       setCupomAplicado({
         codigo: data.codigo || cdg,
         desconto: Number(data.desconto || 0),
-        freteGratis: !!data.freteGratis || cdg === 'FRETEGRATIS',
+        freteGratis: !!data.freteGratis, // só vale se a API confirmar
       });
     } catch (err: any) {
       setCupomErro(err.message || 'Cupom inválido ou expirado.');
@@ -273,6 +295,22 @@ export default function CarrinhoPage() {
       return;
     }
 
+    if (!freteSelecionado) {
+      setErroCheckout('Calcule e selecione uma opção de frete antes de finalizar.');
+      return;
+    }
+
+    const cpfLimpo = userData.cpf.replace(/\D/g, '');
+    const telefoneLimpo = userData.telefone.replace(/\D/g, '');
+    if (cpfLimpo.length !== 11) {
+      setErroCheckout('Informe um CPF válido (11 dígitos).');
+      return;
+    }
+    if (telefoneLimpo.length < 10) {
+      setErroCheckout('Informe um telefone válido com DDD.');
+      return;
+    }
+
     setLoadingCheckout(true);
     try {
       const mappedItemsPayload = items.map(it => ({
@@ -284,7 +322,7 @@ export default function CarrinhoPage() {
         image: it.imagem || it.image || '',
       }));
 
-      // 🟢 Anexa o volume total de brinde acumulado (+15L, +10L, +5L) do tipo escolhido
+      // Anexa o volume total de brinde acumulado (+5L a cada 20L) do tipo escolhido
       if (temDireitoABrinde) {
         const brindeObj = BRINDES_OPCOES.find(b => b.id === brindeEscolhido) || BRINDES_OPCOES[0];
         mappedItemsPayload.push({
@@ -297,6 +335,8 @@ export default function CarrinhoPage() {
         });
       }
 
+      // IMPORTANTE: o servidor deve RECALCULAR preços, frete, cupom e desconto.
+      // Os valores abaixo vindos do navegador servem só como referência.
       const checkoutPayload = {
         items: mappedItemsPayload,
         paymentMethodId: metodoPagamento,
@@ -304,12 +344,13 @@ export default function CarrinhoPage() {
         userId: userData.id || null,
         userEmail: userData.email,
         userName: userData.nome,
-        userPhone: userData.telefone || '11999999999',
-        userCpf: userData.cpf || '00000000000',
+        userPhone: telefoneLimpo,
+        userCpf: cpfLimpo,
         cupomCodigo: cupomAplicado?.codigo || null,
         observacoes: observacoes.trim() || null,
-        shippingCost: freteSelecionado?.valor || 0,
-        shippingServiceName: freteSelecionado?.nome || 'Padrão',
+        shippingCost: freteSelecionado.valor,
+        shippingServiceId: freteSelecionado.id,
+        shippingServiceName: freteSelecionado.nome,
         address: { cep: cep.replace(/\D/g, ''), rua, numero, complemento, bairro, cidade, estado }
       };
 
@@ -369,7 +410,7 @@ export default function CarrinhoPage() {
   return (
     <div style={{ minHeight: '100vh', background: '#f7f4ee', color: '#111827', fontFamily: "'Inter', sans-serif", padding: '30px 20px 80px' }}>
       <div style={{ maxWidth: 1100, margin: '0 auto' }}>
-        
+
         {/* Topo do Carrinho */}
         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 24 }}>
           <Link href="/produtos" style={{ display: 'inline-flex', alignItems: 'center', gap: 6, color: '#15803d', fontWeight: 800, fontSize: 13, textDecoration: 'none' }}>
@@ -400,15 +441,15 @@ export default function CarrinhoPage() {
             </p>
 
             {pixResultado.qrCodeBase64 && (
-              <img 
-                src={`data:image/png;base64,${pixResultado.qrCodeBase64}`} 
-                alt="QR Code Pix" 
-                style={{ width: 180, height: 180, margin: '0 auto 20px', borderRadius: 12, border: '1px solid #e5e7eb', padding: 8 }} 
+              <img
+                src={`data:image/png;base64,${pixResultado.qrCodeBase64}`}
+                alt="QR Code Pix"
+                style={{ width: 180, height: 180, margin: '0 auto 20px', borderRadius: 12, border: '1px solid #e5e7eb', padding: 8 }}
               />
             )}
 
             <div style={{ marginBottom: 24 }}>
-              <button 
+              <button
                 onClick={copiarChavePix}
                 style={{ background: '#15803d', color: 'white', border: 'none', borderRadius: 10, padding: '12px 20px', fontWeight: 800, fontSize: 13.5, cursor: 'pointer', display: 'inline-flex', alignItems: 'center', gap: 8, width: '100%', justifyContent: 'center' }}
               >
@@ -424,13 +465,13 @@ export default function CarrinhoPage() {
         ) : (
           /* ESTRUTURA DE 2 COLUNAS */
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(320px, 1fr))', gap: 24, alignItems: 'start' }}>
-            
-            {/* COLUNA 1: PRODUTOS, BRINDE ACUMULADO, ENDEREÇO E FRETE */}
+
+            {/* COLUNA 1: PRODUTOS, BRINDE ACUMULADO, FRETE, ENDEREÇO E CUPOM */}
             <div style={{ display: 'flex', flexDirection: 'column', gap: 20 }}>
-              
-              {/* LISTA DE PRODUTOS COMPLETA */}
-              <div style={{ background: 'white', borderRadius: 20, border: '1px solid #e7e2d6', padding: 20 }}>
-                <h2 style={{ fontSize: 15, fontWeight: 900, color: '#0d2410', marginBottom: 16, display: 'flex', alignItems: 'center', gap: 8 }}>
+
+              {/* LISTA DE PRODUTOS */}
+              <div style={cardStyle}>
+                <h2 style={h2Style}>
                   <ShoppingBag size={18} color="#15803d" /> Itens no Carrinho ({items.length})
                 </h2>
 
@@ -442,10 +483,10 @@ export default function CarrinhoPage() {
 
                     return (
                       <div key={item.id} style={{ display: 'flex', gap: 12, alignItems: 'center', borderBottom: '1px solid #f3f4f6', paddingBottom: 12 }}>
-                        <img 
-                          src={itemImg} 
-                          alt={item.nome || item.name} 
-                          style={{ width: 60, height: 60, objectFit: 'cover', borderRadius: 10, background: '#f9fafb', border: '1px solid #e5e7eb' }} 
+                        <img
+                          src={itemImg}
+                          alt={item.nome || item.name}
+                          style={{ width: 60, height: 60, objectFit: 'cover', borderRadius: 10, background: '#f9fafb', border: '1px solid #e5e7eb' }}
                         />
                         <div style={{ flex: 1 }}>
                           <h3 style={{ fontSize: 13, fontWeight: 800, color: '#111827', margin: 0 }}>
@@ -456,11 +497,11 @@ export default function CarrinhoPage() {
                           </p>
                           <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
                             <div style={{ display: 'inline-flex', alignItems: 'center', border: '1px solid #d1d5db', borderRadius: 6, overflow: 'hidden' }}>
-                              <button onClick={() => updateQuantity(item.id, Math.max(1, item.quantity - 1))} style={{ padding: '2px 8px', border: 'none', background: '#f3f4f6', cursor: 'pointer', fontWeight: 800 }}>-</button>
+                              <button type="button" onClick={() => updateQuantity(item.id, Math.max(1, item.quantity - 1))} style={{ padding: '2px 8px', border: 'none', background: '#f3f4f6', cursor: 'pointer', fontWeight: 800 }}>-</button>
                               <span style={{ padding: '2px 10px', fontSize: 12, fontWeight: 800 }}>{item.quantity}</span>
-                              <button onClick={() => updateQuantity(item.id, item.quantity + 1)} style={{ padding: '2px 8px', border: 'none', background: '#f3f4f6', cursor: 'pointer', fontWeight: 800 }}>+</button>
+                              <button type="button" onClick={() => updateQuantity(item.id, item.quantity + 1)} style={{ padding: '2px 8px', border: 'none', background: '#f3f4f6', cursor: 'pointer', fontWeight: 800 }}>+</button>
                             </div>
-                            <button onClick={() => removeItem(item.id)} style={{ background: 'none', border: 'none', color: '#ef4444', cursor: 'pointer', padding: 2 }}>
+                            <button type="button" onClick={() => removeItem(item.id)} style={{ background: 'none', border: 'none', color: '#ef4444', cursor: 'pointer', padding: 2 }}>
                               <Trash2 size={15} />
                             </button>
                           </div>
@@ -474,7 +515,14 @@ export default function CarrinhoPage() {
                 </div>
               </div>
 
-              {/* 🟢 CARD COMPACTO DE SELEÇÃO DE BRINDE ACUMULADO (CUPOM BIOMAIS5) */}
+              {/* AVISO: CUPOM BIOMAIS5 APLICADO, MAS AINDA SEM 20L */}
+              {cupomBiomais5 && !temDireitoABrinde && (
+                <div style={{ background: '#fffbeb', border: '1.5px dashed #d97706', borderRadius: 14, padding: 14, fontSize: 12, color: '#92400e', fontWeight: 700 }}>
+                  Cupom BIOMAIS5 ativo! Faltam {litrosFaltandoParaBrinde}L em substratos no carrinho para ganhar +5L de brinde ({totalLitrosSubstrato}L detectados).
+                </div>
+              )}
+
+              {/* CARD DE SELEÇÃO DE BRINDE ACUMULADO (CUPOM BIOMAIS5) */}
               {temDireitoABrinde && (
                 <div style={{ background: '#f0fdf4', border: '1.5px dashed #16a34a', borderRadius: 14, padding: 14 }}>
                   <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 4 }}>
@@ -510,9 +558,7 @@ export default function CarrinhoPage() {
                           <div style={{ fontSize: 12, fontWeight: 800, color: brindeEscolhido === b.id ? '#15803d' : '#1f2937' }}>
                             +{litrosBrindeTotal}L {b.nomeBase}
                           </div>
-                          <div style={{ fontSize: 10.5, color: '#6b7280' }}>
-                            {b.descricao}
-                          </div>
+                          <div style={{ fontSize: 10.5, color: '#6b7280' }}>{b.descricao}</div>
                         </div>
                         <span style={{ fontSize: 11, fontWeight: 800, color: brindeEscolhido === b.id ? '#15803d' : '#9ca3af' }}>
                           {brindeEscolhido === b.id ? '✓ Selecionado' : 'Selecionar'}
@@ -524,110 +570,138 @@ export default function CarrinhoPage() {
               )}
 
               {/* CARD DE CÁLCULO DE FRETE */}
-              <div style={{ background: 'white', border: '1px solid #e7e2d6', borderRadius: 20, padding: 20 }}>
-                <h3 style={{ fontSize: 14, fontWeight: 900, marginBottom: 10, display: 'flex', alignItems: 'center', gap: 6, color: '#0d2410' }}>
+              <div style={cardStyle}>
+                <h3 style={h3Style}>
                   <Truck size={16} color="#15803d" /> Opções de Entrega (Melhor Envio)
                 </h3>
                 <form onSubmit={handleCalcularFrete} style={{ display: 'flex', gap: 8, marginBottom: 12 }}>
-                  <input 
-                    type="text" 
-                    placeholder="Digite seu CEP (Ex: 16600-023)" 
+                  <input
+                    type="text"
+                    placeholder="Digite seu CEP (Ex: 16600-023)"
                     value={cep}
                     onChange={(e) => setCep(e.target.value)}
                     style={{ flex: 1, padding: '10px 12px', borderRadius: 8, border: '1px solid #d1d5db', fontSize: 13, outline: 'none' }}
                   />
-                  <button 
-                    type="submit" 
-                    disabled={calculandoFrete}
-                    style={{ background: '#0d2410', color: 'white', border: 'none', borderRadius: 8, padding: '0 16px', fontSize: 12, fontWeight: 800, cursor: 'pointer' }}
-                  >
+                  <button type="submit" disabled={calculandoFrete} style={{ ...darkBtn, padding: '0 16px' }}>
                     {calculandoFrete ? <Loader2 size={14} className="animate-spin" /> : 'Calcular'}
                   </button>
                 </form>
 
                 {freteErro && <p style={{ fontSize: 12, color: '#b91c1c', marginTop: 8, fontWeight: 600 }}>{freteErro}</p>}
-                
+
                 {freteOpcoes.length > 0 && (
                   <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-                    {freteOpcoes.map((opcao) => (
-                      <label 
-                        key={opcao.nome} 
-                        style={{ 
-                          display: 'flex', 
-                          alignItems: 'center', 
-                          justifyContent: 'space-between', 
-                          background: freteSelecionado?.nome === opcao.nome ? '#f0fdf4' : '#f9fafb',
-                          border: freteSelecionado?.nome === opcao.nome ? '2px solid #15803d' : '1px solid #e5e7eb',
-                          padding: '10px 12px', 
-                          borderRadius: 8, 
-                          cursor: 'pointer',
-                          fontSize: 12.5,
-                          transition: 'all 0.2s ease'
-                        }}
-                      >
-                        <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                          <input 
-                            type="radio" 
-                            name="opcaoFrete" 
-                            checked={freteSelecionado?.nome === opcao.nome}
-                            onChange={() => setFreteSelecionado({ nome: opcao.nome, valor: opcao.valor })}
-                            style={{ accentColor: '#15803d' }}
-                          />
-                          <div>
-                            <span style={{ fontWeight: 700, color: '#111827' }}>{opcao.nome}</span>
-                            <p style={{ fontSize: 11, color: '#6b7280', margin: '2px 0 0' }}>Prazo: {opcao.prazo} dias úteis</p>
+                    {freteOpcoes.map((opcao) => {
+                      const selecionada = freteSelecionado?.id === opcao.id;
+                      return (
+                        <label
+                          key={opcao.id}
+                          style={{
+                            display: 'flex',
+                            alignItems: 'center',
+                            justifyContent: 'space-between',
+                            background: selecionada ? '#f0fdf4' : '#f9fafb',
+                            border: selecionada ? '2px solid #15803d' : '1px solid #e5e7eb',
+                            padding: '10px 12px',
+                            borderRadius: 8,
+                            cursor: 'pointer',
+                            fontSize: 12.5,
+                            transition: 'all 0.2s ease'
+                          }}
+                        >
+                          <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                            <input
+                              type="radio"
+                              name="opcaoFrete"
+                              checked={selecionada}
+                              onChange={() => setFreteSelecionado({ id: opcao.id, nome: opcao.nome, valor: opcao.valor })}
+                              style={{ accentColor: '#15803d' }}
+                            />
+                            <div>
+                              <span style={{ fontWeight: 700, color: '#111827' }}>{opcao.nome}</span>
+                              <p style={{ fontSize: 11, color: '#6b7280', margin: '2px 0 0' }}>Prazo: {opcao.prazo} dias úteis</p>
+                            </div>
                           </div>
-                        </div>
-                        <span style={{ fontWeight: 800, color: '#15803d' }}>
-                          {cupomAplicado?.freteGratis ? 'Grátis' : (opcao.valor === 0 ? 'Grátis' : fmt(opcao.valor))}
-                        </span>
-                      </label>
-                    ))}
+                          <span style={{ fontWeight: 800, color: '#15803d' }}>
+                            {cupomAplicado?.freteGratis ? 'Grátis' : fmt(opcao.valor)}
+                          </span>
+                        </label>
+                      );
+                    })}
                   </div>
                 )}
               </div>
 
-              {/* FORMULÁRIO DE ENDEREÇO & OBSERVAÇÕES */}
-              <div style={{ background: 'white', borderRadius: 20, border: '1px solid #e7e2d6', padding: 20 }}>
-                <h2 style={{ fontSize: 15, fontWeight: 900, color: '#0d2410', marginBottom: 16, display: 'flex', alignItems: 'center', gap: 8 }}>
+              {/* FORMULÁRIO DE ENDEREÇO, DADOS DO COMPRADOR & OBSERVAÇÕES */}
+              <div style={cardStyle}>
+                <h2 style={h2Style}>
                   <MapPin size={18} color="#15803d" /> Endereço Completo de Entrega
                 </h2>
 
                 <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
                   <div style={{ gridColumn: 'span 2' }}>
-                    <label style={{ fontSize: 11.5, fontWeight: 800, color: '#4b5563', display: 'block', marginBottom: 4 }}>Rua / Avenida *</label>
-                    <input type="text" value={rua} onChange={e => setRua(e.target.value)} style={{ width: '100%', padding: '9px 12px', borderRadius: 8, border: '1px solid #d1d5db', fontSize: 13 }} required />
+                    <label style={labelStyle}>Rua / Avenida *</label>
+                    <input type="text" value={rua} onChange={e => setRua(e.target.value)} style={inputStyle} required />
                   </div>
 
                   <div>
-                    <label style={{ fontSize: 11.5, fontWeight: 800, color: '#4b5563', display: 'block', marginBottom: 4 }}>Número *</label>
-                    <input type="text" value={numero} onChange={e => setNumero(e.target.value)} style={{ width: '100%', padding: '9px 12px', borderRadius: 8, border: '1px solid #d1d5db', fontSize: 13 }} required />
+                    <label style={labelStyle}>Número *</label>
+                    <input type="text" value={numero} onChange={e => setNumero(e.target.value)} style={inputStyle} required />
                   </div>
 
                   <div>
-                    <label style={{ fontSize: 11.5, fontWeight: 800, color: '#4b5563', display: 'block', marginBottom: 4 }}>Complemento</label>
-                    <input type="text" value={complemento} onChange={e => setComplemento(e.target.value)} placeholder="Ex: Apto 12" style={{ width: '100%', padding: '9px 12px', borderRadius: 8, border: '1px solid #d1d5db', fontSize: 13 }} />
+                    <label style={labelStyle}>Complemento</label>
+                    <input type="text" value={complemento} onChange={e => setComplemento(e.target.value)} placeholder="Ex: Apto 12" style={inputStyle} />
+                  </div>
+
+                  <div style={{ gridColumn: 'span 2' }}>
+                    <label style={labelStyle}>Bairro *</label>
+                    <input type="text" value={bairro} onChange={e => setBairro(e.target.value)} style={inputStyle} required />
                   </div>
 
                   <div>
-                    <label style={{ fontSize: 11.5, fontWeight: 800, color: '#4b5563', display: 'block', marginBottom: 4 }}>Bairro *</label>
-                    <input type="text" value={bairro} onChange={e => setBairro(e.target.value)} style={{ width: '100%', padding: '9px 12px', borderRadius: 8, border: '1px solid #d1d5db', fontSize: 13 }} required />
+                    <label style={labelStyle}>Cidade *</label>
+                    <input type="text" value={cidade} onChange={e => setCidade(e.target.value)} style={inputStyle} required />
                   </div>
 
                   <div>
-                    <label style={{ fontSize: 11.5, fontWeight: 800, color: '#4b5563', display: 'block', marginBottom: 4 }}>Cidade / UF *</label>
-                    <input type="text" value={cidade ? `${cidade}/${estado}` : ''} onChange={e => setCidade(e.target.value)} style={{ width: '100%', padding: '9px 12px', borderRadius: 8, border: '1px solid #d1d5db', fontSize: 13 }} required />
+                    <label style={labelStyle}>UF *</label>
+                    <input type="text" value={estado} maxLength={2} onChange={e => setEstado(e.target.value.toUpperCase())} style={inputStyle} required />
+                  </div>
+
+                  <div>
+                    <label style={labelStyle}>CPF *</label>
+                    <input
+                      type="text"
+                      value={userData.cpf}
+                      onChange={e => setUserData({ ...userData, cpf: e.target.value })}
+                      placeholder="000.000.000-00"
+                      style={inputStyle}
+                      required
+                    />
+                  </div>
+
+                  <div>
+                    <label style={labelStyle}>Telefone (DDD) *</label>
+                    <input
+                      type="text"
+                      value={userData.telefone}
+                      onChange={e => setUserData({ ...userData, telefone: e.target.value })}
+                      placeholder="(14) 99999-9999"
+                      style={inputStyle}
+                      required
+                    />
                   </div>
 
                   {/* CAMPO DE OBSERVAÇÕES DO PEDIDO */}
                   <div style={{ gridColumn: 'span 2', marginTop: 4 }}>
-                    <label style={{ fontSize: 11.5, fontWeight: 800, color: '#4b5563', display: 'flex', alignItems: 'center', gap: 4, marginBottom: 4 }}>
+                    <label style={{ ...labelStyle, display: 'flex', alignItems: 'center', gap: 4 }}>
                       <MessageSquare size={14} color="#15803d" /> Observações para Entrega / Pedido (Opcional)
                     </label>
-                    <textarea 
-                      value={observacoes} 
-                      onChange={e => setObservacoes(e.target.value)} 
-                      placeholder="Ex: Deixar com o porteiro, horário preferencial, ou mensagem para a equipe..." 
+                    <textarea
+                      value={observacoes}
+                      onChange={e => setObservacoes(e.target.value)}
+                      placeholder="Ex: Deixar com o porteiro, horário preferencial, ou mensagem para a equipe..."
                       style={{ width: '100%', height: 60, padding: '8px 12px', borderRadius: 8, border: '1px solid #d1d5db', fontSize: 12.5, fontFamily: 'inherit', resize: 'none' }}
                     />
                   </div>
@@ -635,23 +709,19 @@ export default function CarrinhoPage() {
               </div>
 
               {/* CARD DE CUPOM */}
-              <div style={{ background: 'white', border: '1px solid #e7e2d6', borderRadius: 20, padding: 20 }}>
-                <h3 style={{ fontSize: 14, fontWeight: 900, marginBottom: 10, display: 'flex', alignItems: 'center', gap: 6, color: '#0d2410' }}>
+              <div style={cardStyle}>
+                <h3 style={h3Style}>
                   <Tag size={16} color="#15803d" /> Cupom de Desconto
                 </h3>
                 <form onSubmit={handleAplicarCupom} style={{ display: 'flex', gap: 8 }}>
-                  <input 
-                    type="text" 
-                    placeholder="Digite seu cupom AQUI :)" 
+                  <input
+                    type="text"
+                    placeholder="Digite seu cupom AQUI :)"
                     value={cupomInput}
                     onChange={(e) => setCupomInput(e.target.value)}
                     style={{ flex: 1, padding: '10px 12px', borderRadius: 8, border: '1px solid #d1d5db', fontSize: 13, outline: 'none', textTransform: 'uppercase' }}
                   />
-                  <button 
-                    type="submit" 
-                    disabled={aplicandoCupom}
-                    style={{ background: '#0d2410', color: 'white', border: 'none', borderRadius: 8, padding: '0 16px', fontSize: 12, fontWeight: 800, cursor: 'pointer' }}
-                  >
+                  <button type="submit" disabled={aplicandoCupom} style={darkBtn}>
                     {aplicandoCupom ? <Loader2 size={14} className="animate-spin" /> : 'Aplicar'}
                   </button>
                 </form>
@@ -667,53 +737,17 @@ export default function CarrinhoPage() {
 
             {/* COLUNA 2: FORMA DE PAGAMENTO TRANSPARENTE E RESUMO */}
             <div style={{ display: 'flex', flexDirection: 'column', gap: 20 }}>
-              
-              {/* SELETOR DE PAGAMENTO TRANSPARENTE */}
-              <div style={{ background: 'white', borderRadius: 20, border: '1px solid #e7e2d6', padding: 20 }}>
-                <h2 style={{ fontSize: 15, fontWeight: 900, color: '#0d2410', marginBottom: 16, display: 'flex', alignItems: 'center', gap: 8 }}>
+
+              <div style={cardStyle}>
+                <h2 style={h2Style}>
                   <Lock size={18} color="#15803d" /> Escolha o Pagamento
                 </h2>
 
                 <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10, marginBottom: 20 }}>
-                  <button
-                    type="button"
-                    onClick={() => setMetodoPagamento('pix')}
-                    style={{
-                      padding: '12px 14px',
-                      borderRadius: 12,
-                      border: metodoPagamento === 'pix' ? '2px solid #15803d' : '1px solid #d1d5db',
-                      background: metodoPagamento === 'pix' ? '#f0fdf4' : 'white',
-                      color: metodoPagamento === 'pix' ? '#15803d' : '#4b5563',
-                      fontWeight: 800,
-                      fontSize: 13,
-                      cursor: 'pointer',
-                      display: 'flex',
-                      alignItems: 'center',
-                      justifyContent: 'center',
-                      gap: 8
-                    }}
-                  >
+                  <button type="button" onClick={() => setMetodoPagamento('pix')} style={payBtn(metodoPagamento === 'pix')}>
                     <QrCode size={18} /> Pix (Instantâneo)
                   </button>
-
-                  <button
-                    type="button"
-                    onClick={() => setMetodoPagamento('cartao')}
-                    style={{
-                      padding: '12px 14px',
-                      borderRadius: 12,
-                      border: metodoPagamento === 'cartao' ? '2px solid #15803d' : '1px solid #d1d5db',
-                      background: metodoPagamento === 'cartao' ? '#f0fdf4' : 'white',
-                      color: metodoPagamento === 'cartao' ? '#15803d' : '#4b5563',
-                      fontWeight: 800,
-                      fontSize: 13,
-                      cursor: 'pointer',
-                      display: 'flex',
-                      alignItems: 'center',
-                      justifyContent: 'center',
-                      gap: 8
-                    }}
-                  >
+                  <button type="button" onClick={() => setMetodoPagamento('cartao')} style={payBtn(metodoPagamento === 'cartao')}>
                     <CreditCard size={18} /> Cartão de Crédito
                   </button>
                 </div>
@@ -726,29 +760,29 @@ export default function CarrinhoPage() {
                   ) : (
                     <div style={{ display: 'flex', flexDirection: 'column', gap: 12, marginBottom: 20 }}>
                       <div>
-                        <label style={{ fontSize: 11.5, fontWeight: 800, color: '#4b5563', display: 'block', marginBottom: 4 }}>Número do Cartão *</label>
-                        <input type="text" value={numeroCartao} onChange={e => setNumeroCartao(e.target.value)} placeholder="0000 0000 0000 0000" style={{ width: '100%', padding: '9px 12px', borderRadius: 8, border: '1px solid #d1d5db', fontSize: 13 }} required />
+                        <label style={labelStyle}>Número do Cartão *</label>
+                        <input type="text" value={numeroCartao} onChange={e => setNumeroCartao(e.target.value)} placeholder="0000 0000 0000 0000" style={inputStyle} required />
                       </div>
 
                       <div>
-                        <label style={{ fontSize: 11.5, fontWeight: 800, color: '#4b5563', display: 'block', marginBottom: 4 }}>Nome como no Cartão *</label>
-                        <input type="text" value={nomeCartao} onChange={e => setNomeCartao(e.target.value)} placeholder="NOME DO TITULAR" style={{ width: '100%', padding: '9px 12px', borderRadius: 8, border: '1px solid #d1d5db', fontSize: 13 }} required />
+                        <label style={labelStyle}>Nome como no Cartão *</label>
+                        <input type="text" value={nomeCartao} onChange={e => setNomeCartao(e.target.value)} placeholder="NOME DO TITULAR" style={inputStyle} required />
                       </div>
 
                       <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 }}>
                         <div>
-                          <label style={{ fontSize: 11.5, fontWeight: 800, color: '#4b5563', display: 'block', marginBottom: 4 }}>Validade *</label>
-                          <input type="text" value={valocidadeCartao} onChange={e => setValocidadeCartao(e.target.value)} placeholder="MM/AA" style={{ width: '100%', padding: '9px 12px', borderRadius: 8, border: '1px solid #d1d5db', fontSize: 13 }} required />
+                          <label style={labelStyle}>Validade *</label>
+                          <input type="text" value={validadeCartao} onChange={e => setValidadeCartao(e.target.value)} placeholder="MM/AA" style={inputStyle} required />
                         </div>
                         <div>
-                          <label style={{ fontSize: 11.5, fontWeight: 800, color: '#4b5563', display: 'block', marginBottom: 4 }}>CVV *</label>
-                          <input type="text" value={cvvCartao} onChange={e => setCvvCartao(e.target.value)} placeholder="123" style={{ width: '100%', padding: '9px 12px', borderRadius: 8, border: '1px solid #d1d5db', fontSize: 13 }} required />
+                          <label style={labelStyle}>CVV *</label>
+                          <input type="text" value={cvvCartao} onChange={e => setCvvCartao(e.target.value)} placeholder="123" style={inputStyle} required />
                         </div>
                       </div>
 
                       <div>
-                        <label style={{ fontSize: 11.5, fontWeight: 800, color: '#4b5563', display: 'block', marginBottom: 4 }}>Parcelas</label>
-                        <select value={parcelas} onChange={e => setParcelas(Number(e.target.value))} style={{ width: '100%', padding: '9px 12px', borderRadius: 8, border: '1px solid #d1d5db', fontSize: 13, background: 'white', fontWeight: 700 }}>
+                        <label style={labelStyle}>Parcelas</label>
+                        <select value={parcelas} onChange={e => setParcelas(Number(e.target.value))} style={{ ...inputStyle, background: 'white', fontWeight: 700 }}>
                           <option value={1}>1x de R$ {total.toFixed(2)} (Sem juros)</option>
                           <option value={2}>2x de R$ {(total / 2).toFixed(2)} (Sem juros)</option>
                           <option value={3}>3x de R$ {(total / 3).toFixed(2)} (Sem juros)</option>
@@ -776,10 +810,10 @@ export default function CarrinhoPage() {
                       <span>
                         {cupomAplicado?.freteGratis ? (
                           <strong style={{ color: '#15803d' }}>Grátis (Cupom {cupomAplicado.codigo})</strong>
-                        ) : valorFrete > 0 ? (
-                          fmt(valorFrete)
+                        ) : freteSelecionado ? (
+                          fmt(freteSelecionado.valor)
                         ) : (
-                          freteSelecionado ? 'Grátis' : 'A calcular'
+                          'A calcular'
                         )}
                       </span>
                     </div>
@@ -815,9 +849,7 @@ export default function CarrinhoPage() {
                         <Loader2 size={20} className="animate-spin" /> Processando Pagamento...
                       </>
                     ) : (
-                      <>
-                        Finalizar Pedido com {metodoPagamento === 'pix' ? 'Pix' : 'Cartão'}
-                      </>
+                      <>Finalizar Pedido com {metodoPagamento === 'pix' ? 'Pix' : 'Cartão'}</>
                     )}
                   </button>
                 </form>
