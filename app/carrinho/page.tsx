@@ -15,11 +15,11 @@ const fmt = (v?: number | null) => {
   return `R$ ${v.toFixed(2).replace('.', ',')}`;
 };
 
-// 🟢 3 OPÇÕES DE 5 LITROS DE SUBSTRATO PARA O CUPOM BIOMAIS5
-const BRINDES_BIOMAIS5 = [
-  { id: 'brinde-substrato-rico-5l', nome: '+5L Substrato Rico Bioflow', descricao: 'Nutrição completa e aeração ideal' },
-  { id: 'brinde-super-solo-5l', nome: '+5L Super Solo Vivo Bioflow', descricao: 'Orgânico pronto e super ativado' },
-  { id: 'brinde-coco-perlita-5l', nome: '+5L Fibra de Coco & Perlita', descricao: 'Drenagem máxima e leveza' },
+// 🟢 3 OPÇÕES BASE DE SUBSTRATO PARA O CUPOM BIOMAIS5
+const BRINDES_OPCOES = [
+  { id: 'brinde-substrato-rico', nomeBase: 'Substrato Rico Bioflow', descricao: 'Nutrição completa e aeração ideal' },
+  { id: 'brinde-super-solo', nomeBase: 'Super Solo Vivo Bioflow', descricao: 'Orgânico pronto e super ativado' },
+  { id: 'brinde-coco-perlita', nomeBase: 'Fibra de Coco & Perlita', descricao: 'Drenagem máxima e leveza' },
 ];
 
 export default function CarrinhoPage() {
@@ -40,8 +40,8 @@ export default function CarrinhoPage() {
   const [complemento, setComplemento] = useState('');
   const [observacoes, setObservacoes] = useState('');
 
-  // Brinde Escolhido (+5L)
-  const [brindeEscolhido, setBrindeEscolhido] = useState<string>('brinde-substrato-rico-5l');
+  // Brinde Escolhido (ID da opção)
+  const [brindeEscolhido, setBrindeEscolhido] = useState<string>('brinde-substrato-rico');
 
   // Cupom
   const [cupomInput, setCupomInput] = useState('');
@@ -116,10 +116,32 @@ export default function CarrinhoPage() {
     );
   }
 
-  // Cálculos de Valores
+  // CÁLCULO DE VALORES
   const subtotal = items.reduce((acc, it) => acc + ((it.preco || (it as any).price || 0) * it.quantity), 0);
-  
-  // 🟢 Se o cupom aplicado for de frete grátis, o valor cobrado do frete vira R$ 0,00!
+
+  // 🟢 CÁLCULO DINÂMICO DE LITROS NO CARRINHO PARA O CUPOM BIOMAIS5
+  const totalLitrosSubstrato = items.reduce((acc, item) => {
+    const sizeStr = String(item.variacao || item.size || '').toUpperCase();
+    const nameStr = String(item.nome || item.name || '').toUpperCase();
+    const match = sizeStr.match(/(\d+)\s*L/i) || sizeStr.match(/(\d+)\s*LITRO/i) || nameStr.match(/(\d+)\s*L/i);
+    let litrosUnidade = match ? parseInt(match[1], 10) : 0;
+
+    if (litrosUnidade === 0) {
+      if (sizeStr.includes('50')) litrosUnidade = 50;
+      else if (sizeStr.includes('20')) litrosUnidade = 20;
+      else if (sizeStr.includes('10')) litrosUnidade = 10;
+      else if (sizeStr.includes('5')) litrosUnidade = 5;
+    }
+
+    const qtd = Number(item.quantity || 1);
+    return acc + (litrosUnidade * qtd);
+  }, 0);
+
+  // A cada 20 Litros no carrinho ganha +5 Litros de brinde
+  const fatorBrinde = Math.max(1, Math.floor(totalLitrosSubstrato / 20));
+  const litrosBrindeTotal = fatorBrinde * 5;
+
+  // FRETE & DESCONTO
   const valorFrete = cupomAplicado?.freteGratis 
     ? 0 
     : (freteSelecionado ? freteSelecionado.valor : 0);
@@ -127,7 +149,7 @@ export default function CarrinhoPage() {
   const valorDesconto = cupomAplicado ? cupomAplicado.desconto : 0;
   const total = Math.max(0, subtotal + valorFrete - valorDesconto);
 
-  // 🟢 REGRA DE BRINDE: O BRINDE DE +5L SÓ APARECE SE O CUPOM FOR BIOMAIS5!
+  // 🟢 REGRA DE BRINDE: SÓ APARECE SE O CUPOM FOR BIOMAIS5
   const temDireitoABrinde = cupomAplicado?.codigo?.trim().toUpperCase() === 'BIOMAIS5';
 
   // CÁLCULO OFICIAL DE FRETE
@@ -262,15 +284,15 @@ export default function CarrinhoPage() {
         image: it.imagem || it.image || '',
       }));
 
-      // 🟢 Anexa a variação de +5L de substrato escolhida se o cupom BIOMAIS5 estiver ativo
+      // 🟢 Anexa o volume total de brinde acumulado (+15L, +10L, +5L) do tipo escolhido
       if (temDireitoABrinde) {
-        const brindeObj = BRINDES_BIOMAIS5.find(b => b.id === brindeEscolhido) || BRINDES_BIOMAIS5[0];
+        const brindeObj = BRINDES_OPCOES.find(b => b.id === brindeEscolhido) || BRINDES_OPCOES[0];
         mappedItemsPayload.push({
-          id: brindeObj.id,
-          name: brindeObj.nome,
+          id: `${brindeObj.id}-${litrosBrindeTotal}l`,
+          name: `+${litrosBrindeTotal}L ${brindeObj.nomeBase}`,
           price: 0,
           quantity: 1,
-          size: '+5 LITROS BRINDE',
+          size: `+${litrosBrindeTotal} LITROS BRINDE`,
           image: '/products/substrato.jpg',
         });
       }
@@ -403,7 +425,7 @@ export default function CarrinhoPage() {
           /* ESTRUTURA DE 2 COLUNAS */
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(320px, 1fr))', gap: 24, alignItems: 'start' }}>
             
-            {/* COLUNA 1: PRODUTOS, BRINDE, ENDEREÇO E FRETE */}
+            {/* COLUNA 1: PRODUTOS, BRINDE ACUMULADO, ENDEREÇO E FRETE */}
             <div style={{ display: 'flex', flexDirection: 'column', gap: 20 }}>
               
               {/* LISTA DE PRODUTOS COMPLETA */}
@@ -452,21 +474,21 @@ export default function CarrinhoPage() {
                 </div>
               </div>
 
-              {/* 🟢 CARD COMPACTO DE SELEÇÃO DE +5L DE SUBSTRATO (CUPOM BIOMAIS5) */}
+              {/* 🟢 CARD COMPACTO DE SELEÇÃO DE BRINDE ACUMULADO (CUPOM BIOMAIS5) */}
               {temDireitoABrinde && (
                 <div style={{ background: '#f0fdf4', border: '1.5px dashed #16a34a', borderRadius: 14, padding: 14 }}>
                   <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 4 }}>
                     <Gift size={18} color="#16a34a" />
                     <h3 style={{ fontSize: 13.5, fontWeight: 900, color: '#15803d', margin: 0 }}>
-                      Cupom BIOMAIS5 Ativo! Escolha seus +5 Litros de Substrato:
+                      Cupom BIOMAIS5 Ativo! Você ganhou +{litrosBrindeTotal}L de Substrato Grátis!
                     </h3>
                   </div>
                   <p style={{ fontSize: 11.5, color: '#166534', margin: '0 0 10px' }}>
-                    Selecione qual opção de 5L você deseja receber de bônus no seu pedido:
+                    Acúmulo de +5L a cada 20L no carrinho ({totalLitrosSubstrato}L detectados). Escolha 1 tipo para receber seus +{litrosBrindeTotal}L:
                   </p>
 
                   <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
-                    {BRINDES_BIOMAIS5.map((b) => (
+                    {BRINDES_OPCOES.map((b) => (
                       <button
                         key={b.id}
                         type="button"
@@ -486,7 +508,7 @@ export default function CarrinhoPage() {
                       >
                         <div>
                           <div style={{ fontSize: 12, fontWeight: 800, color: brindeEscolhido === b.id ? '#15803d' : '#1f2937' }}>
-                            {b.nome}
+                            +{litrosBrindeTotal}L {b.nomeBase}
                           </div>
                           <div style={{ fontSize: 10.5, color: '#6b7280' }}>
                             {b.descricao}
