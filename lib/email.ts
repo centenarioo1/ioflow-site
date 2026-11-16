@@ -5,6 +5,7 @@ interface ItemPedido {
   nome: string;
   quantidade: number;
   preco: number;
+  variacao?: string;
 }
 
 interface DadosEmailPedidoCriado {
@@ -27,6 +28,20 @@ interface DadosEmailConfirmacao {
   valorTotal: number;
   metodoPagamento: string;
   enderecoEntrega?: string;
+}
+
+interface DadosEmailAdmin {
+  numeroPedido: string;
+  nomeCliente: string;
+  emailCliente: string;
+  telefoneCliente?: string;
+  cpfCliente?: string;
+  itens: ItemPedido[];
+  valorTotal: number;
+  metodoPagamento: string;
+  enderecoEntrega: string;
+  cupomCodigo?: string;
+  observacoes?: string;
 }
 
 function getResendClient() {
@@ -62,9 +77,13 @@ export async function enviarEmailPedidoCriado(dados: DadosEmailPedidoCriado) {
       .map(
         (item) => `
         <tr>
-          <td style="padding: 10px; border-bottom: 1px solid #e7e2d6; color: #132e13; font-weight: 600;">${item.nome}</td>
+          <td style="padding: 10px; border-bottom: 1px solid #e7e2d6; color: #132e13; font-weight: 600;">
+            ${item.nome} ${item.variacao ? `<br/><small style="color: #6b7280;">(${item.variacao})</small>` : ''}
+          </td>
           <td style="padding: 10px; border-bottom: 1px solid #e7e2d6; text-align: center; color: #6b7280;">${item.quantidade}x</td>
-          <td style="padding: 10px; border-bottom: 1px solid #e7e2d6; text-align: right; color: #132e13; font-weight: 700;">R$ ${(item.preco * item.quantidade).toFixed(2).replace('.', ',')}</td>
+          <td style="padding: 10px; border-bottom: 1px solid #e7e2d6; text-align: right; color: #132e13; font-weight: 700;">
+            ${item.preco === 0 ? '<span style="color: #16a34a;">GRÁTIS</span>' : `R$ ${(item.preco * item.quantidade).toFixed(2).replace('.', ',')}`}
+          </td>
         </tr>
       `
       )
@@ -74,7 +93,6 @@ export async function enviarEmailPedidoCriado(dados: DadosEmailPedidoCriado) {
       ? `<p style="font-size: 13px; color: #6b7280; margin-bottom: 16px;"><strong>Endereço de Entrega:</strong><br />${enderecoEntrega}</p>`
       : '';
 
-    // Bloco especial para o PIX Copia e Cola
     const pixHtml = codigoPix
       ? `
         <div style="background-color: #fefce8; border: 1px dashed #ca8a04; border-radius: 12px; padding: 16px; margin: 20px 0; text-align: center;">
@@ -92,7 +110,6 @@ export async function enviarEmailPedidoCriado(dados: DadosEmailPedidoCriado) {
       <div style="font-family: 'Helvetica Neue', Helvetica, Arial, sans-serif; background-color: #f7f4ee; padding: 30px 10px; color: #1f2937;">
         <div style="max-width: 600px; margin: 0 auto; background-color: #ffffff; border-radius: 16px; overflow: hidden; border: 1px solid #e7e2d6; box-shadow: 0 4px 20px rgba(0,0,0,0.03);">
           
-          <!-- CABEÇALHO -->
           <div style="background-color: #0d2410; padding: 24px; text-align: center;">
             <h1 style="color: #ffffff; margin: 0; font-size: 24px; font-weight: 900; letter-spacing: 1px;">
               BIOFLOW<span style="color: #d4a843;">.</span>
@@ -102,7 +119,6 @@ export async function enviarEmailPedidoCriado(dados: DadosEmailPedidoCriado) {
             </p>
           </div>
 
-          <!-- CORPO DO E-MAIL -->
           <div style="padding: 30px 24px;">
             <h2 style="color: #0d2410; font-size: 18px; margin-top: 0;">Olá, ${nomeCliente}! 🌱</h2>
             <p style="color: #4b5563; font-size: 14px; line-height: 1.5;">
@@ -111,7 +127,6 @@ export async function enviarEmailPedidoCriado(dados: DadosEmailPedidoCriado) {
 
             ${pixHtml}
 
-            <!-- TABELA DE ITENS -->
             <div style="margin: 24px 0;">
               <table style="width: 100%; border-collapse: collapse; font-size: 13px;">
                 <thead>
@@ -127,7 +142,6 @@ export async function enviarEmailPedidoCriado(dados: DadosEmailPedidoCriado) {
               </table>
             </div>
 
-            <!-- RESUMO -->
             <div style="background-color: #faf8f5; border-radius: 12px; padding: 16px; border: 1px solid #e7e2d6; margin-bottom: 24px;">
               <div style="display: flex; justify-content: space-between; font-size: 14px; margin-bottom: 8px;">
                 <span style="color: #6b7280;">Pagamento:</span>
@@ -148,7 +162,6 @@ export async function enviarEmailPedidoCriado(dados: DadosEmailPedidoCriado) {
             </div>
           </div>
 
-          <!-- RODAPÉ -->
           <div style="background-color: #faf8f5; padding: 16px; text-align: center; border-top: 1px solid #e7e2d6; font-size: 11px; color: #9ca3af;">
             <p style="margin: 0;">BIOFLOW Orgânicos — Nutrição Organomineral de Precisão</p>
           </div>
@@ -188,9 +201,13 @@ export async function enviarEmailConfirmacaoPedido(dados: DadosEmailConfirmacao)
       .map(
         (item) => `
         <tr>
-          <td style="padding: 10px; border-bottom: 1px solid #e7e2d6; color: #132e13; font-weight: 600;">${item.nome}</td>
+          <td style="padding: 10px; border-bottom: 1px solid #e7e2d6; color: #132e13; font-weight: 600;">
+            ${item.nome} ${item.variacao ? `<br/><small style="color: #6b7280;">(${item.variacao})</small>` : ''}
+          </td>
           <td style="padding: 10px; border-bottom: 1px solid #e7e2d6; text-align: center; color: #6b7280;">${item.quantidade}x</td>
-          <td style="padding: 10px; border-bottom: 1px solid #e7e2d6; text-align: right; color: #132e13; font-weight: 700;">R$ ${(item.preco * item.quantidade).toFixed(2).replace('.', ',')}</td>
+          <td style="padding: 10px; border-bottom: 1px solid #e7e2d6; text-align: right; color: #132e13; font-weight: 700;">
+            ${item.preco === 0 ? '<span style="color: #16a34a;">GRÁTIS</span>' : `R$ ${(item.preco * item.quantidade).toFixed(2).replace('.', ',')}`}
+          </td>
         </tr>
       `
       )
@@ -204,7 +221,6 @@ export async function enviarEmailConfirmacaoPedido(dados: DadosEmailConfirmacao)
       <div style="font-family: 'Helvetica Neue', Helvetica, Arial, sans-serif; background-color: #f7f4ee; padding: 30px 10px; color: #1f2937;">
         <div style="max-width: 600px; margin: 0 auto; background-color: #ffffff; border-radius: 16px; overflow: hidden; border: 1px solid #e7e2d6; box-shadow: 0 4px 20px rgba(0,0,0,0.03);">
           
-          <!-- CABEÇALHO -->
           <div style="background-color: #0d2410; padding: 24px; text-align: center;">
             <h1 style="color: #ffffff; margin: 0; font-size: 24px; font-weight: 900; letter-spacing: 1px;">
               BIOFLOW<span style="color: #d4a843;">.</span>
@@ -214,7 +230,6 @@ export async function enviarEmailConfirmacaoPedido(dados: DadosEmailConfirmacao)
             </p>
           </div>
 
-          <!-- CORPO -->
           <div style="padding: 30px 24px;">
             <h2 style="color: #0d2410; font-size: 18px; margin-top: 0;">Excelente notícia, ${nomeCliente}! 🎉</h2>
             <p style="color: #4b5563; font-size: 14px; line-height: 1.5;">
@@ -256,7 +271,6 @@ export async function enviarEmailConfirmacaoPedido(dados: DadosEmailConfirmacao)
             </div>
           </div>
 
-          <!-- RODAPÉ -->
           <div style="background-color: #faf8f5; padding: 16px; text-align: center; border-top: 1px solid #e7e2d6; font-size: 11px; color: #9ca3af;">
             <p style="margin: 0;">BIOFLOW Orgânicos — Nutrição Organomineral de Precisão</p>
           </div>
@@ -279,5 +293,107 @@ export async function enviarEmailConfirmacaoPedido(dados: DadosEmailConfirmacao)
   } catch (error: any) {
     console.error('❌ [Email Service] Erro ao enviar e-mail de confirmação:', error);
     return { ok: false, error: error.message };
+  }
+}
+
+/**
+ * 🟢 E-MAIL 3: Alerta completo enviado ao ADMIN quando um novo pedido é registrado/aprovado
+ */
+export async function enviarEmailAdminNovoPedido(dados: DadosEmailAdmin) {
+  try {
+    const resend = getResendClient();
+    if (!resend) return { ok: false, error: 'RESEND_API_KEY ausente' };
+
+    const emailAdminDestino = process.env.ADMIN_EMAIL || 'vendas@biofloworganicos.com.br';
+
+    const itensHtml = dados.itens
+      .map(
+        (item) => `
+        <tr>
+          <td style="padding: 10px; border-bottom: 1px solid #e5e7eb; color: #1f2937;">
+            <strong>${item.nome}</strong> ${item.variacao ? `<br/><small style="color:#6b7280;">Variação: ${item.variacao}</small>` : ''}
+          </td>
+          <td style="padding: 10px; border-bottom: 1px solid #e5e7eb; text-align: center; color: #4b5563;">${item.quantidade}x</td>
+          <td style="padding: 10px; border-bottom: 1px solid #e5e7eb; text-align: right; font-weight: 700; color: #1f2937;">
+            ${item.preco === 0 ? '<span style="color: #16a34a;">BRINDE GRÁTIS</span>' : `R$ ${(item.preco * item.quantidade).toFixed(2).replace('.', ',')}`}
+          </td>
+        </tr>
+      `
+      )
+      .join('');
+
+    const htmlTemplate = `
+      <div style="font-family: 'Helvetica Neue', Helvetica, Arial, sans-serif; background-color: #f4f4f5; padding: 24px 10px; color: #18181b;">
+        <div style="max-width: 650px; margin: 0 auto; background: #ffffff; border-radius: 16px; padding: 28px; border: 1px solid #e4e4e7; box-shadow: 0 4px 20px rgba(0,0,0,0.04);">
+          
+          <div style="background-color: #0d2410; padding: 20px; border-radius: 12px; text-align: center; margin-bottom: 24px;">
+            <h2 style="color: #ffffff; margin: 0; font-size: 20px; font-weight: 900; letter-spacing: 0.5px;">
+              🛒 NOVO PEDIDO RECEBIDO #${dados.numeroPedido}
+            </h2>
+            <p style="color: #4ade80; margin: 6px 0 0; font-size: 13px; font-weight: 700;">
+              Notificação de Venda - Bioflow Orgânicos
+            </p>
+          </div>
+
+          <h3 style="color: #15803d; font-size: 15px; border-bottom: 2px solid #dcfce7; padding-bottom: 6px; margin-top: 0;">👤 Dados do Cliente:</h3>
+          <p style="font-size: 13.5px; line-height: 1.6; color: #3f3f46; margin-bottom: 20px;">
+            <strong>Nome:</strong> ${dados.nomeCliente}<br/>
+            <strong>E-mail:</strong> ${dados.emailCliente}<br/>
+            <strong>Telefone:</strong> ${dados.telefoneCliente || 'Não informado'}<br/>
+            <strong>CPF:</strong> ${dados.cpfCliente || 'Não informado'}
+          </p>
+
+          <h3 style="color: #15803d; font-size: 15px; border-bottom: 2px solid #dcfce7; padding-bottom: 6px;">📍 Endereço de Entrega:</h3>
+          <p style="font-size: 13px; background: #fafafa; padding: 14px; border-radius: 10px; border: 1px solid #e4e4e7; color: #3f3f46; margin-bottom: 20px;">
+            ${dados.enderecoEntrega}
+          </p>
+
+          ${dados.observacoes ? `
+            <div style="background-color: #fefce8; border: 1px dashed #ca8a04; padding: 14px; border-radius: 10px; margin-bottom: 20px;">
+              <strong style="color: #854d0e; font-size: 13.5px;">📝 Observações do Cliente:</strong>
+              <p style="margin: 6px 0 0; font-size: 13px; color: #713f12; line-height: 1.4;">${dados.observacoes}</p>
+            </div>
+          ` : ''}
+
+          <h3 style="color: #15803d; font-size: 15px; border-bottom: 2px solid #dcfce7; padding-bottom: 6px;">📦 Itens do Pedido para Separação:</h3>
+          <table style="width: 100%; border-collapse: collapse; font-size: 13px; margin-bottom: 20px;">
+            <thead>
+              <tr style="background-color: #f4f4f5; color: #27272a; text-align: left;">
+                <th style="padding: 10px;">Item</th>
+                <th style="padding: 10px; text-align: center;">Qtd</th>
+                <th style="padding: 10px; text-align: right;">Total</th>
+              </tr>
+            </thead>
+            <tbody>
+              ${itensHtml}
+            </tbody>
+          </table>
+
+          <div style="background-color: #f4f4f5; padding: 16px; border-radius: 12px; font-size: 14px; color: #27272a;">
+            <div style="margin-bottom: 6px;"><strong>Forma de Pagamento:</strong> ${dados.metodoPagamento}</div>
+            ${dados.cupomCodigo ? `<div style="margin-bottom: 6px;"><strong>Cupom Usado:</strong> <span style="color:#15803d; font-weight:700;">${dados.cupomCodigo}</span></div>` : ''}
+            <div style="font-size: 17px; font-weight: 900; color: #15803d; margin-top: 8px; border-top: 1px solid #e4e4e7; padding-top: 8px;">
+              Valor Total do Pedido: R$ ${dados.valorTotal.toFixed(2).replace('.', ',')}
+            </div>
+          </div>
+
+        </div>
+      </div>
+    `;
+
+    const remetente = process.env.EMAIL_REMETENTE || 'Bioflow Orgânicos <vendas@biofloworganicos.com.br>';
+
+    const response = await resend.emails.send({
+      from: remetente,
+      to: [emailAdminDestino],
+      subject: `🚨 [NOVO PEDIDO] #${dados.numeroPedido} - R$ ${dados.valorTotal.toFixed(2).replace('.', ',')} (${dados.nomeCliente})`,
+      html: htmlTemplate,
+    });
+
+    console.log('✅ [Email Service] E-mail do Admin enviado:', response);
+    return { ok: true, data: response };
+  } catch (err: any) {
+    console.error('❌ [Email Service] Erro ao enviar e-mail ao Admin:', err);
+    return { ok: false, error: err.message };
   }
 }

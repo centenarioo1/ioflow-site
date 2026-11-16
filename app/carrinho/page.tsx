@@ -7,13 +7,20 @@ import { useRouter } from 'next/navigation';
 import { useCartStore } from '@/store/useCartStore';
 import { 
   ShoppingBag, Trash2, ArrowLeft, ShieldCheck, Tag, Check, Truck, 
-  MapPin, Loader2, CreditCard, QrCode, Copy, CheckCircle2, Lock, AlertCircle
+  MapPin, Loader2, CreditCard, QrCode, Copy, CheckCircle2, Lock, Gift, MessageSquare
 } from 'lucide-react';
 
 const fmt = (v?: number | null) => {
   if (v === undefined || v === null || isNaN(v)) return 'R$ 0,00';
   return `R$ ${v.toFixed(2).replace('.', ',')}`;
 };
+
+// 🟢 LISTA DE BRINDES EXCLUSIVOS BIOFLOW
+const BRINDES_DISPONIVEIS = [
+  { id: 'brinde-girassol', nome: '🎁 Sementes de Girassol Anão (Sunspot)', descricao: 'Fácil cultivo e linda florada em vaso!' },
+  { id: 'brinde-manjericao', nome: '🎁 Sementes de Manjericão Roxo Aromático', descricao: 'Perfeito para hortas aromáticas e culinária.' },
+  { id: 'brinde-dosador', nome: '🎁 Dosador Graduado de Precisão 60ml', descricao: 'Ideal para dosar fertilizantes líquidos Bioflow.' },
+];
 
 export default function CarrinhoPage() {
   const router = useRouter();
@@ -31,6 +38,10 @@ export default function CarrinhoPage() {
   const [cidade, setCidade] = useState('');
   const [estado, setEstado] = useState('');
   const [complemento, setComplemento] = useState('');
+  const [observacoes, setObservacoes] = useState('');
+
+  // Brinde Escolhido
+  const [brindeEscolhido, setBrindeEscolhido] = useState<string>('brinde-girassol');
 
   // Cupom
   const [cupomInput, setCupomInput] = useState('');
@@ -111,6 +122,13 @@ export default function CarrinhoPage() {
   const valorDesconto = cupomAplicado ? cupomAplicado.desconto : 0;
   const total = Math.max(0, subtotal + valorFrete - valorDesconto);
 
+  // 🟢 REGRA DE BRINDE: Adicionou item de 20L OU subtotal >= R$ 150 OU Cupom aplicado
+  const temDireitoABrinde = items.some(it => {
+    const tam = String(it.variacao || (it as any).size || '').toUpperCase();
+    const nm = String(it.nome || (it as any).name || '').toUpperCase();
+    return tam.includes('20L') || nm.includes('20L') || nm.includes('20 L');
+  }) || subtotal >= 150 || !!cupomAplicado;
+
   // CÁLCULO OFICIAL DE FRETE
   const handleCalcularFrete = async (e?: React.FormEvent) => {
     if (e) e.preventDefault();
@@ -126,7 +144,6 @@ export default function CarrinhoPage() {
 
     setCalculandoFrete(true);
 
-    // Auto-preenchimento do Endereço via ViaCEP
     try {
       const viaCepRes = await fetch(`https://viacep.com.br/ws/${cepLimpo}/json/`);
       const viaCepData = await viaCepRes.json();
@@ -140,7 +157,6 @@ export default function CarrinhoPage() {
       console.warn('Erro ao consultar ViaCEP:', err);
     }
 
-    // Chamada oficial da cotação
     try {
       const res = await fetch('/api/shipping/calculate', {
         method: 'POST',
@@ -234,15 +250,30 @@ export default function CarrinhoPage() {
 
     setLoadingCheckout(true);
     try {
+      // 🟢 Anexa o brinde como item de R$ 0,00 se qualificado
+      const mappedItemsPayload = items.map(it => ({
+        id: it.productId || it.variantId || it.id,
+        name: it.nome || it.name,
+        price: Number(it.preco || it.price || 0),
+        quantity: Number(it.quantity),
+        size: it.variacao || it.size || 'Padrão',
+        image: it.imagem || it.image || '',
+      }));
+
+      if (temDireitoABrinde) {
+        const brindeObj = BRINDES_DISPONIVEIS.find(b => b.id === brindeEscolhido) || BRINDES_DISPONIVEIS[0];
+        mappedItemsPayload.push({
+          id: brindeObj.id,
+          name: brindeObj.nome,
+          price: 0,
+          quantity: 1,
+          size: 'BRINDE GRÁTIS',
+          image: '/products/mimo.jpg',
+        });
+      }
+
       const checkoutPayload = {
-        items: items.map(it => ({
-          id: it.productId || it.variantId || it.id,
-          name: it.nome || it.name,
-          price: Number(it.preco || it.price || 0),
-          quantity: Number(it.quantity),
-          size: it.variacao || it.size || 'Padrão',
-          image: it.imagem || it.image || '',
-        })),
+        items: mappedItemsPayload,
         paymentMethodId: metodoPagamento,
         installments: metodoPagamento === 'cartao' ? parcelas : 1,
         userId: userData.id || null,
@@ -251,6 +282,7 @@ export default function CarrinhoPage() {
         userPhone: userData.telefone || '11999999999',
         userCpf: userData.cpf || '00000000000',
         cupomCodigo: cupomAplicado?.codigo || null,
+        observacoes: observacoes.trim() || null,
         shippingCost: valorFrete,
         shippingServiceName: freteSelecionado?.nome || 'Padrão',
         address: { cep: cep.replace(/\D/g, ''), rua, numero, complemento, bairro, cidade, estado }
@@ -368,10 +400,10 @@ export default function CarrinhoPage() {
           /* ESTRUTURA DE 2 COLUNAS */
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(320px, 1fr))', gap: 24, alignItems: 'start' }}>
             
-            {/* COLUNA 1: PRODUTOS, ENDEREÇO E FRETE */}
+            {/* COLUNA 1: PRODUTOS, BRINDE, ENDEREÇO E FRETE */}
             <div style={{ display: 'flex', flexDirection: 'column', gap: 20 }}>
               
-              {/* LISTA DE PRODUTOS COMPLETA COM MINIATURAS VISÍVEIS */}
+              {/* LISTA DE PRODUTOS COMPLETA */}
               <div style={{ background: 'white', borderRadius: 20, border: '1px solid #e7e2d6', padding: 20 }}>
                 <h2 style={{ fontSize: 15, fontWeight: 900, color: '#0d2410', marginBottom: 16, display: 'flex', alignItems: 'center', gap: 8 }}>
                   <ShoppingBag size={18} color="#15803d" /> Itens no Carrinho ({items.length})
@@ -417,7 +449,55 @@ export default function CarrinhoPage() {
                 </div>
               </div>
 
-              {/* CARD DE CÁLCULO DE FRETE RESTAURADO E OFICIAL */}
+              {/* 🟢 CARD DE SELEÇÃO DE BRINDE AUTOMÁTICO */}
+              {temDireitoABrinde && (
+                <div style={{ background: '#f0fdf4', border: '2px dashed #16a34a', borderRadius: 20, padding: 20 }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 8 }}>
+                    <Gift size={22} color="#16a34a" />
+                    <h3 style={{ fontSize: 15, fontWeight: 900, color: '#15803d', margin: 0 }}>
+                      Parabéns! Você ganhou um Brinde Bioflow! 🎉
+                    </h3>
+                  </div>
+                  <p style={{ fontSize: 12.5, color: '#166534', margin: '0 0 14px' }}>
+                    Por comprar uma embalagem de 20L, usar um cupom ou atingir o valor mínimo, selecione qual presente deseja receber na sua caixa:
+                  </p>
+
+                  <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(140px, 1fr))', gap: 10 }}>
+                    {BRINDES_DISPONIVEIS.map((b) => (
+                      <button
+                        key={b.id}
+                        type="button"
+                        onClick={() => setBrindeEscolhido(b.id)}
+                        style={{
+                          background: brindeEscolhido === b.id ? '#ffffff' : 'transparent',
+                          border: brindeEscolhido === b.id ? '2px solid #15803d' : '1px solid #bbf7d0',
+                          borderRadius: 12,
+                          padding: 10,
+                          textAlign: 'left',
+                          cursor: 'pointer',
+                          boxShadow: brindeEscolhido === b.id ? '0 4px 12px rgba(21, 128, 61, 0.15)' : 'none',
+                          transition: 'all 0.2s ease',
+                        }}
+                      >
+                        <div style={{ fontSize: 12, fontWeight: 800, color: brindeEscolhido === b.id ? '#15803d' : '#374151' }}>
+                          {brindeEscolhido === b.id ? '✓ Selecionado' : 'Escolher'}
+                        </div>
+                        <div style={{ fontSize: 11.5, color: '#1f2937', marginTop: 4, fontWeight: 700 }}>
+                          {b.nome.replace('🎁 ', '')}
+                        </div>
+                        <div style={{ fontSize: 10.5, color: '#6b7280', marginTop: 2 }}>
+                          {b.descricao}
+                        </div>
+                        <div style={{ fontSize: 11, color: '#16a34a', fontWeight: 800, marginTop: 6 }}>
+                          GRÁTIS (R$ 0,00)
+                        </div>
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              {/* CARD DE CÁLCULO DE FRETE */}
               <div style={{ background: 'white', border: '1px solid #e7e2d6', borderRadius: 20, padding: 20 }}>
                 <h3 style={{ fontSize: 14, fontWeight: 900, marginBottom: 10, display: 'flex', alignItems: 'center', gap: 6, color: '#0d2410' }}>
                   <Truck size={16} color="#15803d" /> Opções de Entrega (Melhor Envio)
@@ -479,7 +559,7 @@ export default function CarrinhoPage() {
                 )}
               </div>
 
-              {/* FORMULÁRIO DE ENDEREÇO DE ENTREGA */}
+              {/* FORMULÁRIO DE ENDEREÇO & OBSERVAÇÕES */}
               <div style={{ background: 'white', borderRadius: 20, border: '1px solid #e7e2d6', padding: 20 }}>
                 <h2 style={{ fontSize: 15, fontWeight: 900, color: '#0d2410', marginBottom: 16, display: 'flex', alignItems: 'center', gap: 8 }}>
                   <MapPin size={18} color="#15803d" /> Endereço Completo de Entrega
@@ -509,6 +589,19 @@ export default function CarrinhoPage() {
                   <div>
                     <label style={{ fontSize: 11.5, fontWeight: 800, color: '#4b5563', display: 'block', marginBottom: 4 }}>Cidade / UF *</label>
                     <input type="text" value={cidade ? `${cidade}/${estado}` : ''} onChange={e => setCidade(e.target.value)} style={{ width: '100%', padding: '9px 12px', borderRadius: 8, border: '1px solid #d1d5db', fontSize: 13 }} required />
+                  </div>
+
+                  {/* 🟢 CAMPO DE OBSERVAÇÕES DO PEDIDO */}
+                  <div style={{ gridColumn: 'span 2', marginTop: 4 }}>
+                    <label style={{ fontSize: 11.5, fontWeight: 800, color: '#4b5563', display: 'flex', alignItems: 'center', gap: 4, marginBottom: 4 }}>
+                      <MessageSquare size={14} color="#15803d" /> Observações para Entrega / Pedido (Opcional)
+                    </label>
+                    <textarea 
+                      value={observacoes} 
+                      onChange={e => setObservacoes(e.target.value)} 
+                      placeholder="Ex: Deixar com o porteiro, horário preferencial, ou mensagem para a equipe..." 
+                      style={{ width: '100%', height: 60, padding: '8px 12px', borderRadius: 8, border: '1px solid #d1d5db', fontSize: 12.5, fontFamily: 'inherit', resize: 'none' }}
+                    />
                   </div>
                 </div>
               </div>
