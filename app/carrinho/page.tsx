@@ -642,7 +642,7 @@ export default function CarrinhoPage() {
                 <form onSubmit={handleAplicarCupom} style={{ display: 'flex', gap: 8 }}>
                   <input 
                     type="text" 
-                    placeholder="Digite seu cupom (Ex: BIOMAIS5 ou FRETEGRATIS)" 
+                    placeholder="Digite seu cupom AQUI :)" 
                     value={cupomInput}
                     onChange={(e) => setCupomInput(e.target.value)}
                     style={{ flex: 1, padding: '10px 12px', borderRadius: 8, border: '1px solid #d1d5db', fontSize: 13, outline: 'none', textTransform: 'uppercase' }}
