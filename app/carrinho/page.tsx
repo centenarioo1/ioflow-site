@@ -15,11 +15,11 @@ const fmt = (v?: number | null) => {
   return `R$ ${v.toFixed(2).replace('.', ',')}`;
 };
 
-// 🟢 LISTA DE BRINDES EXCLUSIVOS BIOFLOW
-const BRINDES_DISPONIVEIS = [
-  { id: 'brinde-girassol', nome: '🎁 Sementes de Girassol Anão (Sunspot)', descricao: 'Fácil cultivo e linda florada em vaso!' },
-  { id: 'brinde-manjericao', nome: '🎁 Sementes de Manjericão Roxo Aromático', descricao: 'Perfeito para hortas aromáticas e culinária.' },
-  { id: 'brinde-dosador', nome: '🎁 Dosador Graduado de Precisão 60ml', descricao: 'Ideal para dosar fertilizantes líquidos Bioflow.' },
+// 🟢 3 OPÇÕES DE 5 LITROS DE SUBSTRATO PARA O CUPOM BIOMAIS5
+const BRINDES_BIOMAIS5 = [
+  { id: 'brinde-substrato-rico-5l', nome: '+5L Substrato Rico Bioflow', descricao: 'Nutrição completa e aeração ideal' },
+  { id: 'brinde-super-solo-5l', nome: '+5L Super Solo Vivo Bioflow', descricao: 'Orgânico pronto e super ativado' },
+  { id: 'brinde-coco-perlita-5l', nome: '+5L Fibra de Coco & Perlita', descricao: 'Drenagem máxima e leveza' },
 ];
 
 export default function CarrinhoPage() {
@@ -40,8 +40,8 @@ export default function CarrinhoPage() {
   const [complemento, setComplemento] = useState('');
   const [observacoes, setObservacoes] = useState('');
 
-  // Brinde Escolhido
-  const [brindeEscolhido, setBrindeEscolhido] = useState<string>('brinde-girassol');
+  // Brinde Escolhido (+5L)
+  const [brindeEscolhido, setBrindeEscolhido] = useState<string>('brinde-substrato-rico-5l');
 
   // Cupom
   const [cupomInput, setCupomInput] = useState('');
@@ -122,12 +122,8 @@ export default function CarrinhoPage() {
   const valorDesconto = cupomAplicado ? cupomAplicado.desconto : 0;
   const total = Math.max(0, subtotal + valorFrete - valorDesconto);
 
-  // 🟢 REGRA DE BRINDE: Adicionou item de 20L OU subtotal >= R$ 150 OU Cupom aplicado
-  const temDireitoABrinde = items.some(it => {
-    const tam = String(it.variacao || (it as any).size || '').toUpperCase();
-    const nm = String(it.nome || (it as any).name || '').toUpperCase();
-    return tam.includes('20L') || nm.includes('20L') || nm.includes('20 L');
-  }) || subtotal >= 150 || !!cupomAplicado;
+  // 🟢 REGRA DE BRINDE: O BRINDE SÓ APARECE SE O CUPOM FOR BIOMAIS5!
+  const temDireitoABrinde = cupomAplicado?.codigo?.trim().toUpperCase() === 'BIOMAIS5';
 
   // CÁLCULO OFICIAL DE FRETE
   const handleCalcularFrete = async (e?: React.FormEvent) => {
@@ -223,7 +219,7 @@ export default function CarrinhoPage() {
       }
 
       setCupomAplicado({
-        codigo: data.codigo || cupomInput.toUpperCase(),
+        codigo: data.codigo || cupomInput.toUpperCase().trim(),
         desconto: Number(data.desconto || 0),
       });
     } catch (err: any) {
@@ -250,7 +246,6 @@ export default function CarrinhoPage() {
 
     setLoadingCheckout(true);
     try {
-      // 🟢 Anexa o brinde como item de R$ 0,00 se qualificado
       const mappedItemsPayload = items.map(it => ({
         id: it.productId || it.variantId || it.id,
         name: it.nome || it.name,
@@ -260,15 +255,16 @@ export default function CarrinhoPage() {
         image: it.imagem || it.image || '',
       }));
 
+      // 🟢 Anexa a variação de +5L de substrato escolhida se o cupom BIOMAIS5 estiver ativo
       if (temDireitoABrinde) {
-        const brindeObj = BRINDES_DISPONIVEIS.find(b => b.id === brindeEscolhido) || BRINDES_DISPONIVEIS[0];
+        const brindeObj = BRINDES_BIOMAIS5.find(b => b.id === brindeEscolhido) || BRINDES_BIOMAIS5[0];
         mappedItemsPayload.push({
           id: brindeObj.id,
           name: brindeObj.nome,
           price: 0,
           quantity: 1,
-          size: 'BRINDE GRÁTIS',
-          image: '/products/mimo.jpg',
+          size: '+5 LITROS BRINDE',
+          image: '/products/substrato.jpg',
         });
       }
 
@@ -449,21 +445,21 @@ export default function CarrinhoPage() {
                 </div>
               </div>
 
-              {/* 🟢 CARD DE SELEÇÃO DE BRINDE AUTOMÁTICO */}
+              {/* 🟢 CARD COMPACTO DE SELEÇÃO DE +5L DE SUBSTRATO (CUPOM BIOMAIS5) */}
               {temDireitoABrinde && (
-                <div style={{ background: '#f0fdf4', border: '2px dashed #16a34a', borderRadius: 20, padding: 20 }}>
-                  <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 8 }}>
-                    <Gift size={22} color="#16a34a" />
-                    <h3 style={{ fontSize: 15, fontWeight: 900, color: '#15803d', margin: 0 }}>
-                      Parabéns! Você ganhou um Brinde Bioflow! 🎉
+                <div style={{ background: '#f0fdf4', border: '1.5px dashed #16a34a', borderRadius: 14, padding: 14 }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 4 }}>
+                    <Gift size={18} color="#16a34a" />
+                    <h3 style={{ fontSize: 13.5, fontWeight: 900, color: '#15803d', margin: 0 }}>
+                      Cupom BIOMAIS5 Ativo! Escolha seus +5 Litros de Substrato:
                     </h3>
                   </div>
-                  <p style={{ fontSize: 12.5, color: '#166534', margin: '0 0 14px' }}>
-                    Por comprar uma embalagem de 20L, usar um cupom ou atingir o valor mínimo, selecione qual presente deseja receber na sua caixa:
+                  <p style={{ fontSize: 11.5, color: '#166534', margin: '0 0 10px' }}>
+                    Selecione qual opção de 5L você deseja receber de bônus no seu pedido:
                   </p>
 
-                  <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(140px, 1fr))', gap: 10 }}>
-                    {BRINDES_DISPONIVEIS.map((b) => (
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+                    {BRINDES_BIOMAIS5.map((b) => (
                       <button
                         key={b.id}
                         type="button"
@@ -471,26 +467,27 @@ export default function CarrinhoPage() {
                         style={{
                           background: brindeEscolhido === b.id ? '#ffffff' : 'transparent',
                           border: brindeEscolhido === b.id ? '2px solid #15803d' : '1px solid #bbf7d0',
-                          borderRadius: 12,
-                          padding: 10,
+                          borderRadius: 8,
+                          padding: '8px 10px',
                           textAlign: 'left',
                           cursor: 'pointer',
-                          boxShadow: brindeEscolhido === b.id ? '0 4px 12px rgba(21, 128, 61, 0.15)' : 'none',
-                          transition: 'all 0.2s ease',
+                          display: 'flex',
+                          alignItems: 'center',
+                          justifyContent: 'space-between',
+                          transition: 'all 0.15s ease',
                         }}
                       >
-                        <div style={{ fontSize: 12, fontWeight: 800, color: brindeEscolhido === b.id ? '#15803d' : '#374151' }}>
-                          {brindeEscolhido === b.id ? '✓ Selecionado' : 'Escolher'}
+                        <div>
+                          <div style={{ fontSize: 12, fontWeight: 800, color: brindeEscolhido === b.id ? '#15803d' : '#1f2937' }}>
+                            {b.nome}
+                          </div>
+                          <div style={{ fontSize: 10.5, color: '#6b7280' }}>
+                            {b.descricao}
+                          </div>
                         </div>
-                        <div style={{ fontSize: 11.5, color: '#1f2937', marginTop: 4, fontWeight: 700 }}>
-                          {b.nome.replace('🎁 ', '')}
-                        </div>
-                        <div style={{ fontSize: 10.5, color: '#6b7280', marginTop: 2 }}>
-                          {b.descricao}
-                        </div>
-                        <div style={{ fontSize: 11, color: '#16a34a', fontWeight: 800, marginTop: 6 }}>
-                          GRÁTIS (R$ 0,00)
-                        </div>
+                        <span style={{ fontSize: 11, fontWeight: 800, color: brindeEscolhido === b.id ? '#15803d' : '#9ca3af' }}>
+                          {brindeEscolhido === b.id ? '✓ Selecionado' : 'Selecionar'}
+                        </span>
                       </button>
                     ))}
                   </div>
@@ -591,7 +588,7 @@ export default function CarrinhoPage() {
                     <input type="text" value={cidade ? `${cidade}/${estado}` : ''} onChange={e => setCidade(e.target.value)} style={{ width: '100%', padding: '9px 12px', borderRadius: 8, border: '1px solid #d1d5db', fontSize: 13 }} required />
                   </div>
 
-                  {/* 🟢 CAMPO DE OBSERVAÇÕES DO PEDIDO */}
+                  {/* CAMPO DE OBSERVAÇÕES DO PEDIDO */}
                   <div style={{ gridColumn: 'span 2', marginTop: 4 }}>
                     <label style={{ fontSize: 11.5, fontWeight: 800, color: '#4b5563', display: 'flex', alignItems: 'center', gap: 4, marginBottom: 4 }}>
                       <MessageSquare size={14} color="#15803d" /> Observações para Entrega / Pedido (Opcional)
@@ -614,7 +611,7 @@ export default function CarrinhoPage() {
                 <form onSubmit={handleAplicarCupom} style={{ display: 'flex', gap: 8 }}>
                   <input 
                     type="text" 
-                    placeholder="Código do cupom (Ex: BOASVINDAS)" 
+                    placeholder="Digite seu cupom (Ex: BIOMAIS5)" 
                     value={cupomInput}
                     onChange={(e) => setCupomInput(e.target.value)}
                     style={{ flex: 1, padding: '10px 12px', borderRadius: 8, border: '1px solid #d1d5db', fontSize: 13, outline: 'none', textTransform: 'uppercase' }}
