@@ -1,6 +1,7 @@
 // app/api/coupons/validate/route.ts
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
+import { CUPOM_BRINDE } from "@/lib/promocoes";
 
 export async function POST(req: Request) {
   try {
@@ -84,6 +85,11 @@ export async function POST(req: Request) {
       valorDesconto = cupom.valor || 0;
     }
 
+    // BIOMAIS5 é cupom de brinde (+5L a cada 20L): nunca dá desconto em dinheiro,
+    // mesmo que a linha do cupom no banco tenha algum valor.
+    const ehBrinde = codigoFormatado === CUPOM_BRINDE;
+    if (ehBrinde) valorDesconto = 0;
+
     valorDesconto = Math.min(valorDesconto, subtotal);
 
     console.log("[Validador de Cupom] Aplicado com sucesso! Frete Grátis: " + ehFreteGratis + ", Desconto R\$ " + valorDesconto.toFixed(2));
@@ -100,6 +106,7 @@ export async function POST(req: Request) {
       valor: cupom.valor,
       value: cupom.valor,
       freteGratis: ehFreteGratis,
+      brinde: ehBrinde,
     });
 
   } catch (error: any) {
