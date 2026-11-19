@@ -9,16 +9,18 @@ import {
   ShoppingBag, Trash2, ArrowLeft, ShieldCheck, Tag, Check, Truck, 
   MapPin, Loader2, CreditCard, QrCode, Copy, CheckCircle2, Lock, Gift, MessageSquare
 } from 'lucide-react';
-import { FRETE_GRATIS_MINIMO, MAX_OPCOES_FRETE, temFreteGratisPorValor } from '@/lib/frete';
-import { BRINDES_OPCOES, CUPOM_BRINDE, litrosTotais, litrosDeBrinde } from '@/lib/promocoes';
+import { temFreteGratisPorValor } from '@/lib/frete';
 
 const fmt = (v?: number | null) => {
   if (v === undefined || v === null || isNaN(v)) return 'R$ 0,00';
   return `R$ ${v.toFixed(2).replace('.', ',')}`;
 };
 
-type OpcaoFrete = { id: string; nome: string; valor: number; prazo: number };
-type FreteSelecionado = { id: string; nome: string; valor: number };
+const BRINDES_OPCOES = [
+  { id: 'brinde-substrato-rico', nomeBase: 'Substrato Rico Bioflow', descricao: 'Nutrição completa e aeração ideal' },
+  { id: 'brinde-super-solo', nomeBase: 'Super Solo Vivo Bioflow', descricao: 'Orgânico pronto e super ativado' },
+  { id: 'brinde-coco-perlita', nomeBase: 'Fibra de Coco & Perlita', descricao: 'Drenagem máxima e leveza' },
+];
 
 export default function CarrinhoPage() {
   const router = useRouter();
@@ -49,8 +51,8 @@ export default function CarrinhoPage() {
 
   // Frete
   const [calculandoFrete, setCalculandoFrete] = useState(false);
-  const [freteOpcoes, setFreteOpcoes] = useState<OpcaoFrete[]>([]);
-  const [freteSelecionado, setFreteSelecionado] = useState<FreteSelecionado | null>(null);
+  const [freteOpcoes, setFreteOpcoes] = useState<{ nome: string; valor: number; prazo: number }[]>([]);
+  const [freteSelecionado, setFreteSelecionado] = useState<{ nome: string; valor: number } | null>(null);
   const [freteErro, setFreteErro] = useState('');
 
   // Pagamento
@@ -106,22 +108,6 @@ export default function CarrinhoPage() {
     }
   }, []);
 
-  // Se o carrinho ou o CEP mudarem, o frete calculado deixa de valer: zera e exige novo cálculo.
-  useEffect(() => {
-    setFreteOpcoes([]);
-    setFreteSelecionado(null);
-    setFreteErro('');
-  }, [items, cep]);
-
-  // SDK do Mercado Pago (usado para tokenizar o cartão no navegador)
-  useEffect(() => {
-    if ((window as any).MercadoPago) return;
-    const sdk = document.createElement('script');
-    sdk.src = 'https://sdk.mercadopago.com/js/v2';
-    sdk.async = true;
-    document.body.appendChild(sdk);
-  }, []);
-
   if (!isMounted) {
     return (
       <div style={{ minHeight: '100vh', background: '#f7f4ee', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
@@ -135,25 +121,38 @@ export default function CarrinhoPage() {
   const valorDesconto = cupomAplicado ? cupomAplicado.desconto : 0;
   const subtotalLiquido = Math.max(0, subtotal - valorDesconto);
 
-  // FRETE GRÁTIS A PARTIR DO MÍNIMO (subtotal já com desconto): vale só na opção mais barata
+  // FRETE GRÁTIS DE R$ 129,00
   const freteGratisPorValor = temFreteGratisPorValor(subtotalLiquido);
   const possuiFreteGratis = freteGratisPorValor || !!cupomAplicado?.freteGratis;
 
-  const idOpcaoMaisBarata = freteOpcoes[0]?.id;
-  const freteDaOpcao = (o: { id: string; valor: number }) =>
-    cupomAplicado?.freteGratis || (freteGratisPorValor && o.id === idOpcaoMaisBarata) ? 0 : o.valor;
-
-  const valorFrete = freteSelecionado ? freteDaOpcao(freteSelecionado) : 0;
+  const valorFrete = possuiFreteGratis 
+    ? 0 
+    : (freteSelecionado ? freteSelecionado.valor : 0);
 
   const total = Math.max(0, subtotalLiquido + valorFrete);
 
-  // BRINDE BIOMAIS5: +5L a cada 20L completos (mesma regra do servidor)
-  const totalLitrosSubstrato = litrosTotais(items);
-  const litrosBrindeTotal = litrosDeBrinde(totalLitrosSubstrato);
-  const litrosFaltandoParaBrinde = 20 - (totalLitrosSubstrato % 20);
+  // CÁLCULO DINÂMICO DE LITROS
+  const totalLitrosSubstrato = items.reduce((acc, item) => {
+    const sizeStr = String(item.variacao || item.size || '').toUpperCase();
+    const nameStr = String(item.nome || item.name || '').toUpperCase();
+    const match = sizeStr.match(/(\d+)\s*L/i) || sizeStr.match(/(\d+)\s*LITRO/i) || nameStr.match(/(\d+)\s*L/i);
+    let litrosUnidade = match ? parseInt(match, 10) : 0;
 
-  const cupomBiomais5 = cupomAplicado?.codigo?.trim().toUpperCase() === CUPOM_BRINDE;
-  const temDireitoABrinde = cupomBiomais5 && litrosBrindeTotal > 0;
+    if (litrosUnidade === 0) {
+      if (sizeStr.includes('50')) litrosUnidade = 50;
+      else if (sizeStr.includes('20')) litrosUnidade = 20;
+      else if (sizeStr.includes('10')) litrosUnidade = 10;
+      else if (sizeStr.includes('5')) litrosUnidade = 5;
+    }
+
+    const qtd = Number(item.quantity || 1);
+    return acc + (litrosUnidade * qtd);
+  }, 0);
+
+  const fatorBrinde = Math.max(1, Math.floor(totalLitrosSubstrato / 20));
+  const litrosBrindeTotal = fatorBrinde * 5;
+
+  const temDireitoABrinde = cupomAplicado?.codigo?.trim().toUpperCase() === 'BIOMAIS5';
 
   const handleCalcularFrete = async (e?: React.FormEvent) => {
     if (e) e.preventDefault();
@@ -195,15 +194,17 @@ export default function CarrinhoPage() {
         throw new Error(data.error || 'Erro ao calcular frete.');
       }
 
-      const opcoesCalculadas: OpcaoFrete[] = (data.opcoes || [])
-        .filter((o: OpcaoFrete) => Number(o.valor) > 0)
-        .sort((a: OpcaoFrete, b: OpcaoFrete) => a.valor - b.valor)
-        .slice(0, MAX_OPCOES_FRETE);
+      const opcoesCalculadas = data.opcoes || [];
       setFreteOpcoes(opcoesCalculadas);
-
+      
       if (opcoesCalculadas.length > 0) {
-        const primeira = opcoesCalculadas[0];
-        setFreteSelecionado({ id: primeira.id, nome: primeira.nome, valor: primeira.valor });
+        const primeiraOpcao = opcoesCalculadas[0];
+        if (primeiraOpcao) {
+          setFreteSelecionado({
+            nome: primeiraOpcao.nome,
+            valor: primeiraOpcao.valor,
+          });
+        }
       } else {
         setFreteErro('Nenhuma opção de frete disponível para este CEP.');
       }
@@ -238,50 +239,13 @@ export default function CarrinhoPage() {
       setCupomAplicado({
         codigo: data.codigo || cdg,
         desconto: Number(data.desconto || 0),
-        freteGratis: !!data.freteGratis,
+        freteGratis: !!data.freteGratis || cdg === 'FRETEGRATIS',
       });
     } catch (err: any) {
       setCupomErro(err.message || 'Cupom inválido ou expirado.');
     } finally {
       setAplicandoCupom(false);
     }
-  };
-
-  // Cartão: os dados são tokenizados no navegador pelo Mercado Pago. O servidor só recebe o token.
-  const gerarDadosCartao = async (cpfLimpo: string) => {
-    const MP = (window as any).MercadoPago;
-    const publicKey = process.env.NEXT_PUBLIC_MP_PUBLIC_KEY;
-    if (!MP || !publicKey) {
-      throw new Error('Pagamento por cartão indisponível no momento. Use o Pix ou tente novamente.');
-    }
-
-    const numero = numCartao.replace(/\D/g, '');
-    const [mes, anoBruto] = validade.split('/').map((v) => v.trim());
-    const ano = anoBruto && anoBruto.length === 2 ? `20${anoBruto}` : anoBruto;
-
-    if (numero.length < 13 || !mes || !ano || codigoSeg.length < 3 || !titular.trim()) {
-      throw new Error('Confira os dados do cartão (número, validade, CVV e nome).');
-    }
-
-    const mp = new MP(publicKey, { locale: 'pt-BR' });
-
-    const metodos = await mp.getPaymentMethods({ bin: numero.slice(0, 8) });
-    const metodo = metodos?.results?.[0];
-    if (!metodo) throw new Error('Não foi possível identificar a bandeira do cartão.');
-
-    const tokenRes = await mp.createCardToken({
-      cardNumber: numero,
-      cardholderName: titular.trim(),
-      cardExpirationMonth: mes,
-      cardExpirationYear: ano,
-      securityCode: codigoSeg,
-      identificationType: 'CPF',
-      identificationNumber: cpfLimpo,
-    });
-
-    if (!tokenRes?.id) throw new Error('Cartão recusado na validação. Confira os dados.');
-
-    return { token: tokenRes.id as string, paymentMethodId: metodo.id as string, issuerId: metodo.issuer?.id };
   };
 
   const handleProcessarPagamentoTransparente = async (e: React.FormEvent) => {
@@ -298,64 +262,42 @@ export default function CarrinhoPage() {
       return;
     }
 
-    if (!freteSelecionado) {
-      setErroCheckout('Calcule e selecione uma opção de frete antes de finalizar.');
-      return;
-    }
-
-    const cpfLimpo = userData.cpf.replace(/\D/g, '');
-    const telefoneLimpo = userData.telefone.replace(/\D/g, '');
-    if (cpfLimpo.length !== 11) {
-      setErroCheckout('Informe um CPF válido (11 dígitos).');
-      return;
-    }
-    if (telefoneLimpo.length < 10) {
-      setErroCheckout('Informe um telefone válido com DDD.');
-      return;
-    }
-
     setLoadingCheckout(true);
     try {
-      // O servidor confere preço, frete, cupom e brinde. Aqui vai só o que identifica cada item.
-      const mappedItemsPayload = items.map((it: any) => ({
-        id: it.id,
-        productId: it.productId,
-        variantId: it.variantId,
+      const mappedItemsPayload = items.map(it => ({
+        id: it.productId || it.variantId || it.id,
         name: it.nome || it.name,
         price: Number(it.preco || it.price || 0),
         quantity: Number(it.quantity),
         size: it.variacao || it.size || 'Padrão',
         image: it.imagem || it.image || '',
-        weight: it.weight,
-        dimensions: it.dimensions,
       }));
 
-      let paymentMethodIdEnvio = 'pix';
-      let cardToken: string | undefined;
-      let issuerId: string | number | undefined;
-
-      if (metodoPagamento === 'cartao') {
-        const dadosCartao = await gerarDadosCartao(cpfLimpo);
-        paymentMethodIdEnvio = dadosCartao.paymentMethodId;
-        cardToken = dadosCartao.token;
-        issuerId = dadosCartao.issuerId;
+      if (temDireitoABrinde) {
+        const brindeObj = BRINDES_OPCOES.find(b => b.id === brindeEscolhido) || BRINDES_OPCOES[0];
+        mappedItemsPayload.push({
+          id: `${brindeObj.id}-${litrosBrindeTotal}l`,
+          name: `+${litrosBrindeTotal}L ${brindeObj.nomeBase}`,
+          price: 0,
+          quantity: 1,
+          size: `+${litrosBrindeTotal} LITROS BRINDE`,
+          image: '/products/substrato.jpg',
+        });
       }
 
       const checkoutPayload = {
         items: mappedItemsPayload,
-        paymentMethodId: paymentMethodIdEnvio,
-        token: cardToken,
-        issuerId,
+        paymentMethodId: metodoPagamento,
         installments: metodoPagamento === 'cartao' ? parcelas : 1,
         userId: userData.id || null,
         userEmail: userData.email,
         userName: userData.nome,
-        userPhone: telefoneLimpo,
-        userCpf: cpfLimpo,
+        userPhone: userData.telefone || '',
+        userCpf: userData.cpf || '',
         cupomCodigo: cupomAplicado?.codigo || null,
-        brindeId: brindeEscolhido,
         observacoes: observacoes.trim() || null,
-        shippingServiceId: freteSelecionado.id,
+        shippingCost: valorFrete,
+        shippingServiceName: freteSelecionado?.nome || 'Padrão',
         address: { cep: cep.replace(/\D/g, ''), rua, numero, complemento, bairro, cidade, estado }
       };
 
@@ -388,9 +330,6 @@ export default function CarrinhoPage() {
       setErroCheckout(err.message || 'Ocorreu um erro ao processar seu pedido.');
     } finally {
       setLoadingCheckout(false);
-      // Nunca deixe número/CVV do cartão parado em memória depois de tentar pagar
-      setNumCartao('');
-      setCodigoSeg('');
     }
   };
 
@@ -435,9 +374,9 @@ export default function CarrinhoPage() {
         <div style={{ background: possuiFreteGratis ? '#dcfce7' : '#fef3c7', border: possuiFreteGratis ? '1px solid #86efac' : '1px solid #fde68a', color: possuiFreteGratis ? '#166534' : '#92400e', padding: '12px 18px', borderRadius: 12, fontSize: 13, fontWeight: 800, marginBottom: 20, display: 'flex', alignItems: 'center', gap: 8 }}>
           <Truck size={18} />
           {possuiFreteGratis ? (
-            <span>Parabéns! Seu pedido ganhou <strong>FRETE GRÁTIS</strong>{cupomAplicado?.freteGratis ? '!' : ' na opção de frete mais barata!'}</span>
+            <span>Parabéns! Seu pedido ganhou <strong>FRETE GRÁTIS</strong>!</span>
           ) : (
-            <span>Faltam <strong>{fmt(FRETE_GRATIS_MINIMO - subtotalLiquido)}</strong> para você ganhar <strong>FRETE GRÁTIS</strong>!</span>
+            <span>Faltam <strong>{fmt(129.0 - subtotalLiquido)}</strong> para você ganhar <strong>FRETE GRÁTIS</strong>!</span>
           )}
         </div>
 
@@ -527,12 +466,6 @@ export default function CarrinhoPage() {
                 </div>
               </div>
 
-              {cupomBiomais5 && !temDireitoABrinde && (
-                <div style={{ background: '#fffbeb', border: '1.5px dashed #d97706', borderRadius: 14, padding: 14, fontSize: 12, color: '#92400e', fontWeight: 700 }}>
-                  Cupom BIOMAIS5 ativo! Faltam {litrosFaltandoParaBrinde}L em substratos no carrinho para ganhar +5L de brinde ({totalLitrosSubstrato}L detectados).
-                </div>
-              )}
-
               {temDireitoABrinde && (
                 <div style={{ background: '#f0fdf4', border: '1.5px dashed #16a34a', borderRadius: 14, padding: 14 }}>
                   <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 4 }}>
@@ -608,13 +541,13 @@ export default function CarrinhoPage() {
                   <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
                     {freteOpcoes.map((opcao) => (
                       <label 
-                        key={opcao.id} 
+                        key={opcao.nome} 
                         style={{ 
                           display: 'flex', 
                           alignItems: 'center', 
                           justifyContent: 'space-between', 
-                          background: freteSelecionado?.id === opcao.id ? '#f0fdf4' : '#f9fafb',
-                          border: freteSelecionado?.id === opcao.id ? '2px solid #15803d' : '1px solid #e5e7eb',
+                          background: freteSelecionado?.nome === opcao.nome ? '#f0fdf4' : '#f9fafb',
+                          border: freteSelecionado?.nome === opcao.nome ? '2px solid #15803d' : '1px solid #e5e7eb',
                           padding: '10px 12px', 
                           borderRadius: 8, 
                           cursor: 'pointer',
@@ -626,8 +559,8 @@ export default function CarrinhoPage() {
                           <input 
                             type="radio" 
                             name="opcaoFrete" 
-                            checked={freteSelecionado?.id === opcao.id}
-                            onChange={() => setFreteSelecionado({ id: opcao.id, nome: opcao.nome, valor: opcao.valor })}
+                            checked={freteSelecionado?.nome === opcao.nome}
+                            onChange={() => setFreteSelecionado({ nome: opcao.nome, valor: opcao.valor })}
                             style={{ accentColor: '#15803d' }}
                           />
                           <div>
@@ -636,7 +569,7 @@ export default function CarrinhoPage() {
                           </div>
                         </div>
                         <span style={{ fontWeight: 800, color: '#15803d' }}>
-                          {freteDaOpcao(opcao) === 0 ? 'Grátis' : fmt(opcao.valor)}
+                          {possuiFreteGratis ? 'Grátis' : (opcao.valor === 0 ? 'Grátis' : fmt(opcao.valor))}
                         </span>
                       </label>
                     ))}
@@ -671,23 +604,8 @@ export default function CarrinhoPage() {
                   </div>
 
                   <div>
-                    <label style={{ fontSize: 11.5, fontWeight: 800, color: '#4b5563', display: 'block', marginBottom: 4 }}>Cidade *</label>
-                    <input type="text" value={cidade} onChange={e => setCidade(e.target.value)} style={{ width: '100%', padding: '9px 12px', borderRadius: 8, border: '1px solid #d1d5db', fontSize: 13 }} required />
-                  </div>
-
-                  <div>
-                    <label style={{ fontSize: 11.5, fontWeight: 800, color: '#4b5563', display: 'block', marginBottom: 4 }}>UF *</label>
-                    <input type="text" value={estado} maxLength={2} onChange={e => setEstado(e.target.value.toUpperCase())} style={{ width: '100%', padding: '9px 12px', borderRadius: 8, border: '1px solid #d1d5db', fontSize: 13 }} required />
-                  </div>
-
-                  <div>
-                    <label style={{ fontSize: 11.5, fontWeight: 800, color: '#4b5563', display: 'block', marginBottom: 4 }}>CPF *</label>
-                    <input type="text" value={userData.cpf} onChange={e => setUserData({ ...userData, cpf: e.target.value })} placeholder="000.000.000-00" style={{ width: '100%', padding: '9px 12px', borderRadius: 8, border: '1px solid #d1d5db', fontSize: 13 }} required />
-                  </div>
-
-                  <div>
-                    <label style={{ fontSize: 11.5, fontWeight: 800, color: '#4b5563', display: 'block', marginBottom: 4 }}>Telefone (DDD) *</label>
-                    <input type="text" value={userData.telefone} onChange={e => setUserData({ ...userData, telefone: e.target.value })} placeholder="(14) 99999-9999" style={{ width: '100%', padding: '9px 12px', borderRadius: 8, border: '1px solid #d1d5db', fontSize: 13 }} required />
+                    <label style={{ fontSize: 11.5, fontWeight: 800, color: '#4b5563', display: 'block', marginBottom: 4 }}>Cidade / UF *</label>
+                    <input type="text" value={cidade ? `${cidade}/${estado}` : ''} onChange={e => setCidade(e.target.value)} style={{ width: '100%', padding: '9px 12px', borderRadius: 8, border: '1px solid #d1d5db', fontSize: 13 }} required />
                   </div>
 
                   <div style={{ gridColumn: 'span 2', marginTop: 4 }}>
@@ -794,7 +712,7 @@ export default function CarrinhoPage() {
                     <div style={{ display: 'flex', flexDirection: 'column', gap: 12, marginBottom: 20 }}>
                       <div>
                         <label style={{ fontSize: 11.5, fontWeight: 800, color: '#4b5563', display: 'block', marginBottom: 4 }}>Número do Cartão *</label>
-                        <input type="text" value={numCartao} onChange={e => setNumCartao(e.target.value)} placeholder="0000 0000 0000 0000" style={{ width: '100%', padding: '9px 12px', borderRadius: 8, border: '1px solid #d1d5db', fontSize: 13 }} required />
+                        <input type="text" value={numCartao} onChange={e => setNumCartao(e.target.value)} placeholder="Dados do cartão" style={{ width: '100%', padding: '9px 12px', borderRadius: 8, border: '1px solid #d1d5db', fontSize: 13 }} required />
                       </div>
 
                       <div>
@@ -840,14 +758,14 @@ export default function CarrinhoPage() {
                     <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 13, color: '#6b7280', marginBottom: 12 }}>
                       <span>Frete ({freteSelecionado?.nome || 'A calcular'}):</span>
                       <span>
-                        {freteSelecionado && valorFrete === 0 ? (
+                        {possuiFreteGratis ? (
                           <strong style={{ color: '#15803d' }}>
-                            Grátis {cupomAplicado?.freteGratis ? `(Cupom ${cupomAplicado.codigo})` : '(Promoção)'}
+                            Grátis {freteGratisPorValor ? '(Promoção R$ 129)' : `(Cupom ${cupomAplicado?.codigo})`}
                           </strong>
                         ) : valorFrete > 0 ? (
                           fmt(valorFrete)
                         ) : (
-                          'A calcular'
+                          freteSelecionado ? 'Grátis' : 'A calcular'
                         )}
                       </span>
                     </div>

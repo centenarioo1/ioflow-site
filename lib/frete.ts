@@ -1,13 +1,14 @@
 // lib/frete.ts
-// Regras de frete usadas no carrinho (front) E no servidor (cotação e pagamento).
+// Regra única de frete grátis: use este arquivo no carrinho (front) E em /api/mercadopago/process-payment (servidor).
 
-// Frete grátis para pedidos a partir deste valor (subtotal já com o desconto do cupom).
 export const FRETE_GRATIS_MINIMO = 129.0;
 
-// Quantas opções de frete aparecem para o cliente (as mais baratas).
-export const MAX_OPCOES_FRETE = 4;
-
-// Compara em centavos para evitar erro de ponto flutuante.
-// `>=` inclui exatamente o mínimo. Se quiser só valores ACIMA, troque por `>`.
-export const temFreteGratisPorValor = (subtotalAposDesconto: number): boolean =>
-  Math.round(subtotalAposDesconto * 100) >= Math.round(FRETE_GRATIS_MINIMO * 100);
+/**
+ * Compara em centavos para evitar erro de ponto flutuante em JavaScript.
+ * `>=` inclui exatamente R$ 129,00.
+ */
+export const temFreteGratisPorValor = (subtotalAposDesconto: number): boolean => {
+  const subtotalCentavos = Math.round((subtotalAposDesconto || 0) * 100);
+  const minimoCentavos = Math.round(FRETE_GRATIS_MINIMO * 100);
+  return subtotalCentavos >= minimoCentavos;
+};
