@@ -1,5 +1,6 @@
 // app/api/shipping/calculate/route.ts
 import { NextResponse } from 'next/server';
+import { products } from '@/lib/products';
 
 export const dynamic = 'force-dynamic';
 
@@ -36,48 +37,78 @@ export async function POST(request: Request) {
 
   const cleanCep = String(destinationPostalCode).replace(/\D/g, '');
   if (cleanCep.length !== 8) {
-    return NextResponse.json({ error: 'CEP de destino inválido' }, { status: 400 });
+    return NextResponse.json({ error: 'CEP de destino inválido (deve ter 8 dígitos)' }, { status: 400 });
   }
 
   if (!Array.isArray(cartItems) || cartItems.length === 0) {
     return NextResponse.json({ error: 'Carrinho vazio ou formato inválido' }, { status: 400 });
   }
 
-  // 1. Variáveis de ambiente
+  // 1. Variáveis de ambiente com fallbacks seguros
   const meToken = process.env.MELHOR_ENVIO_TOKEN;
-  const originPostalCode = (process.env.MELHOR_ENVIO_POSTAL_CODE || '').replace(/\D/g, '');
-  const contactEmail = process.env.MELHOR_ENVIO_CONTACT_EMAIL || 'contato@biofloworganicos.com.br';
+  const rawOriginCep = (process.env.MELHOR_ENVIO_POSTAL_CODE || '').replace(/\D/g, '');
+  // Se não estiver configurado no Vercel, usa o CEP oficial de Pirajuí/SP (16600-023)
+  const originPostalCode = rawOriginCep.length === 8 ? rawOriginCep : '16600023';
+  const contactEmail = process.env.MELHOR_ENVIO_CONTACT_EMAIL || 'vendas@biofloworganicos.com.br';
   const appName = process.env.MELHOR_ENVIO_APP_NAME || 'LojaBioflow';
 
-  if (!meToken || originPostalCode.length !== 8) {
-    console.error('Config de frete incompleta. Defina MELHOR_ENVIO_TOKEN e MELHOR_ENVIO_POSTAL_CODE (8 dígitos).');
+  if (!meToken) {
+    console.error('Configuração de frete incompleta no servidor: MELHOR_ENVIO_TOKEN ausente.');
     return NextResponse.json(
-      { error: 'Configuração de frete ausente no servidor (MELHOR_ENVIO_TOKEN ou MELHOR_ENVIO_POSTAL_CODE)' },
+      { error: 'Configuração de token do Melhor Envio ausente no servidor. Verifique as variáveis de ambiente.' },
       { status: 500 }
     );
   }
 
   const meHost = 'melhorenvio.com.br';
-  const endpointUrl = process.env.MELHOR_ENVIO_ENDPOINT || `https://${meHost}/api/v2/me/shipment/calculate`;
+  const endpointUrl = process.env.MELHOR_ENVIO_ENDPOINT || ('https://' + meHost + '/api/v2/me/shipment/calculate');
 
-  // 2. Formata os produtos
+  // 2. Formata os produtos (enriquecendo com o catálogo do backend se disponível)
+  const catalogList = (products || []) as any[];
+
   const formattedProducts = cartItems.map((item: any) => {
-    const rawWeight = firstPositive(item.weight, item.peso);
-    const weightKg = rawWeight > LIMITE_PESO_KG_PLAUSIVEL ? rawWeight / 1000 : (rawWeight || 0.5);
+    let realVariant: any = null;
+    const itemIdStr = String(item.id || item.variantId || item.productId || '');
 
-    const width = firstPositive(item.dimensions?.width, item.width, item.largura) || 15;
-    const height = firstPositive(item.dimensions?.height, item.height, item.altura) || 15;
-    const length = firstPositive(item.dimensions?.length, item.length, item.comprimento) || 20;
+    for (const prod of catalogList) {
+      if (prod?.variants && Array.isArray(prod.variants)) {
+        const found = prod.variants.find(
+          (v: any) => String(v.id) === itemIdStr || String(prod.id) === itemIdStr
+        );
+        if (found) {
+          realVariant = found;
+          break;
+        }
+      }
+    }
+
+    let weightKg = 0;
+    let width = 0;
+    let height = 0;
+    let length = 0;
+
+    if (realVariant) {
+      weightKg = Number(realVariant.weight || 1000) / 1000;
+      width = Number(realVariant.dimensions?.width || 15);
+      height = Number(realVariant.dimensions?.height || 15);
+      length = Number(realVariant.dimensions?.length || 20);
+    } else {
+      const rawWeight = firstPositive(item.weight, item.peso);
+      weightKg = rawWeight > LIMITE_PESO_KG_PLAUSIVEL ? rawWeight / 1000 : (rawWeight || 1.0);
+      width = firstPositive(item.dimensions?.width, item.width, item.largura) || 15;
+      height = firstPositive(item.dimensions?.height, item.height, item.altura) || 15;
+      length = firstPositive(item.dimensions?.length, item.length, item.comprimento) || 20;
+    }
 
     const price = Math.max(0, toNumber(item.price ?? item.preco) || 0);
     const quantity = Math.max(1, Math.floor(toNumber(item.quantity ?? item.quantidade) || 1));
 
     return {
       id: String(item.id || item.productId || 'item'),
-      width,
-      height,
-      length,
-      weight: weightKg,
+      width: Math.max(1, width),
+      height: Math.max(1, height),
+      length: Math.max(1, length),
+      weight: Math.max(0.1, weightKg),
       insurance_value: Number(price.toFixed(2)),
       quantity,
     };
@@ -91,8 +122,8 @@ export async function POST(request: Request) {
       headers: {
         Accept: 'application/json',
         'Content-Type': 'application/json',
-        Authorization: `Bearer ${meToken}`,
-        'User-Agent': `${appName} (${contactEmail})`,
+        Authorization: 'Bearer ' + meToken,
+        'User-Agent': appName + ' (' + contactEmail + ')',
       },
       body: JSON.stringify({
         from: { postal_code: originPostalCode },
@@ -106,13 +137,13 @@ export async function POST(request: Request) {
     const timeout = error?.name === 'TimeoutError' || error?.name === 'AbortError';
     console.error('Falha de rede ao chamar o Melhor Envio:', error);
     return NextResponse.json(
-      { error: timeout ? 'O cálculo de frete demorou demais. Tente novamente.' : 'Serviço de frete indisponível no momento.' },
+      { error: timeout ? 'O cálculo de frete demorou demais. Tente novamente.' : 'Serviço de frete indisponível no momento. Tente novamente em instantes.' },
       { status: timeout ? 504 : 502 }
     );
   }
 
   if (!response.ok) {
-    const errorText = await response.text();
+    const errorText = await response.text().catch(() => '');
     console.error('Erro na API do Melhor Envio:', response.status, errorText);
     return NextResponse.json(
       { error: 'Não foi possível calcular o frete agora. Tente novamente em instantes.' },
@@ -150,13 +181,13 @@ export async function POST(request: Request) {
     const serviceName = shipping.name || '';
 
     if (shipping.error) {
-      motivos.push(`${companyName} ${serviceName}: ${shipping.error}`);
+      motivos.push(companyName + ' ' + serviceName + ': ' + shipping.error);
       continue;
     }
 
     const finalPrice = firstPositive(shipping.custom_price, shipping.price);
     if (!Number.isFinite(finalPrice) || finalPrice <= 0) {
-      motivos.push(`${companyName} ${serviceName}: sem preço retornado ou preço zero`);
+      motivos.push(companyName + ' ' + serviceName + ': sem preço retornado');
       continue;
     }
 
@@ -164,7 +195,7 @@ export async function POST(request: Request) {
 
     opcoes.push({
       id: String(shipping.id),
-      nome: `${companyName} (${serviceName})`,
+      nome: companyName + ' (' + serviceName + ')',
       valor: Number(finalPrice.toFixed(2)),
       prazo: Number.isFinite(prazo) ? prazo : 0,
       transportadora: companyName,
@@ -176,7 +207,7 @@ export async function POST(request: Request) {
   // Ordena por menor preço primeiro
   opcoes.sort((a, b) => a.valor - b.valor || a.prazo - b.prazo);
 
-  // 🟢 REGRA DE NEGÓCIO: Retorna apenas as 4 opções mais baratas
+  // 🟢 REGRA DE NEGÓCIO: Retorna apenas as 4 opções de frete mais baratas
   const quatroMaisBaratos = opcoes.slice(0, 4);
 
   if (quatroMaisBaratos.length === 0) {

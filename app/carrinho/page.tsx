@@ -51,8 +51,8 @@ export default function CarrinhoPage() {
 
   // Frete
   const [calculandoFrete, setCalculandoFrete] = useState(false);
-  const [freteOpcoes, setFreteOpcoes] = useState<{ nome: string; valor: number; prazo: number }[]>([]);
-  const [freteSelecionado, setFreteSelecionado] = useState<{ nome: string; valor: number } | null>(null);
+  const [freteOpcoes, setFreteOpcoes] = useState<{ id: string; nome: string; valor: number; prazo: number }[]>([]);
+  const [freteSelecionado, setFreteSelecionado] = useState<{ id: string; nome: string; valor: number } | null>(null);
   const [freteErro, setFreteErro] = useState('');
 
   // Pagamento
@@ -125,9 +125,15 @@ export default function CarrinhoPage() {
   const freteGratisPorValor = temFreteGratisPorValor(subtotalLiquido);
   const possuiFreteGratis = freteGratisPorValor || !!cupomAplicado?.freteGratis;
 
-  const valorFrete = possuiFreteGratis 
-    ? 0 
-    : (freteSelecionado ? freteSelecionado.valor : 0);
+  const isOpcaoGratis = (opcaoId: string) => {
+    if (cupomAplicado?.freteGratis) return true;
+    if (freteGratisPorValor && freteOpcoes.length > 0 && freteOpcoes[0].id === opcaoId) return true;
+    return false;
+  };
+
+  const isFreteSelecionadoGratis = freteSelecionado ? isOpcaoGratis(freteSelecionado.id) : false;
+
+  const valorFrete = freteSelecionado ? (isFreteSelecionadoGratis ? 0 : freteSelecionado.valor) : 0;
 
   const total = Math.max(0, subtotalLiquido + valorFrete);
 
@@ -201,6 +207,7 @@ export default function CarrinhoPage() {
         const primeiraOpcao = opcoesCalculadas[0];
         if (primeiraOpcao) {
           setFreteSelecionado({
+            id: primeiraOpcao.id || '1',
             nome: primeiraOpcao.nome,
             valor: primeiraOpcao.valor,
           });
@@ -373,7 +380,7 @@ export default function CarrinhoPage() {
 
         <div style={{ background: possuiFreteGratis ? '#dcfce7' : '#fef3c7', border: possuiFreteGratis ? '1px solid #86efac' : '1px solid #fde68a', color: possuiFreteGratis ? '#166534' : '#92400e', padding: '12px 18px', borderRadius: 12, fontSize: 13, fontWeight: 800, marginBottom: 20, display: 'flex', alignItems: 'center', gap: 8 }}>
           <Truck size={18} />
-          {possuiFreteGratis ? (
+          {isFreteSelecionadoGratis ? (
             <span>Parabéns! Seu pedido ganhou <strong>FRETE GRÁTIS</strong>!</span>
           ) : (
             <span>Faltam <strong>{fmt(129.0 - subtotalLiquido)}</strong> para você ganhar <strong>FRETE GRÁTIS</strong>!</span>
@@ -559,8 +566,8 @@ export default function CarrinhoPage() {
                           <input 
                             type="radio" 
                             name="opcaoFrete" 
-                            checked={freteSelecionado?.nome === opcao.nome}
-                            onChange={() => setFreteSelecionado({ nome: opcao.nome, valor: opcao.valor })}
+                            checked={freteSelecionado?.id === opcao.id || freteSelecionado?.nome === opcao.nome}
+                            onChange={() => setFreteSelecionado({ id: opcao.id, nome: opcao.nome, valor: opcao.valor })}
                             style={{ accentColor: '#15803d' }}
                           />
                           <div>
@@ -569,7 +576,7 @@ export default function CarrinhoPage() {
                           </div>
                         </div>
                         <span style={{ fontWeight: 800, color: '#15803d' }}>
-                          {possuiFreteGratis ? 'Grátis' : (opcao.valor === 0 ? 'Grátis' : fmt(opcao.valor))}
+                          {isOpcaoGratis(opcao.id) ? 'Grátis' : fmt(opcao.valor)}
                         </span>
                       </label>
                     ))}
@@ -758,7 +765,7 @@ export default function CarrinhoPage() {
                     <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 13, color: '#6b7280', marginBottom: 12 }}>
                       <span>Frete ({freteSelecionado?.nome || 'A calcular'}):</span>
                       <span>
-                        {possuiFreteGratis ? (
+                        {isFreteSelecionadoGratis ? (
                           <strong style={{ color: '#15803d' }}>
                             Grátis {freteGratisPorValor ? '(Promoção R$ 129)' : `(Cupom ${cupomAplicado?.codigo})`}
                           </strong>

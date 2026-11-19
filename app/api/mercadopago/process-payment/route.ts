@@ -125,9 +125,15 @@ export async function POST(req: Request) {
     // 3. REVALIDAÇÃO ESTRITA DE FRETE GRÁTIS NO SERVIDOR (lib/frete.ts)
     const subtotalLiquido = Math.max(0, subtotalOficial - valorDesconto);
     const freteGratisPorValor = temFreteGratisPorValor(subtotalLiquido);
-    const possuiFreteGratis = freteGratisPorValor || ehFreteGratisCupom;
 
-    const valorFreteCobrado = possuiFreteGratis ? 0 : Number(shippingCost || 0);
+    // Cupom FRETEGRATIS zera qualquer opção; Promoção R$ 129 zera apenas se a opção enviada for a gratuita (shippingCost == 0)
+    let valorFreteCobrado = Number(shippingCost || 0);
+    if (ehFreteGratisCupom) {
+      valorFreteCobrado = 0;
+    } else if (freteGratisPorValor && Number(shippingCost || 0) === 0) {
+      valorFreteCobrado = 0;
+    }
+
     const totalOficial = Math.max(0.01, Number((subtotalOficial - valorDesconto + valorFreteCobrado).toFixed(2)));
 
     // 4. VALIDAÇÃO DE USER_ID
