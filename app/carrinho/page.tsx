@@ -136,7 +136,7 @@ export default function CarrinhoPage() {
     const sizeStr = String(item.variacao || item.size || '').toUpperCase();
     const nameStr = String(item.nome || item.name || '').toUpperCase();
     const match = sizeStr.match(/(\d+)\s*L/i) || sizeStr.match(/(\d+)\s*LITRO/i) || nameStr.match(/(\d+)\s*L/i);
-    let litrosUnidade = match ? parseInt(match, 10) : 0;
+    let litrosUnidade = match ? parseInt(match[1], 10) : 0;
 
     if (litrosUnidade === 0) {
       if (sizeStr.includes('50')) litrosUnidade = 50;
