@@ -80,7 +80,7 @@ export async function POST(req: Request) {
         productId: String(clientItem.productId || clientItem.id || 'item'),
         nome: realProductName,
         name: realProductName,
-        title: ,
+        title: realProductName + ' (' + tamanho + ')',
         variacao: tamanho,
         size: tamanho,
         preco: unitPrice,
@@ -146,7 +146,7 @@ export async function POST(req: Request) {
     }
 
     // 5. CRIAÇÃO DO PEDIDO NO BANCO DE DADOS
-    let orderId = ;
+    let orderId = 'ORD-' + Date.now();
     try {
       const order = await prisma.order.create({
         data: {
@@ -196,7 +196,7 @@ export async function POST(req: Request) {
 
     const paymentPayload: Record<string, any> = {
       transaction_amount: totalOficial,
-      description: ,
+      description: 'Pedido ' + orderId + ' - BIOFLOW',
       payment_method_id: paymentMethodId,
       external_reference: orderId,
       statement_descriptor: 'BIOFLOW',
@@ -213,7 +213,7 @@ export async function POST(req: Request) {
         items: validatedItems.map(item => ({
           id: item.id,
           title: item.title,
-          description: ,
+          description: 'Variacao: ' + item.variacao,
           quantity: item.quantity,
           unit_price: item.price,
         })),
@@ -240,13 +240,14 @@ export async function POST(req: Request) {
       }
     }
 
-    const mpApiEndpoint = process.env.MP_PAYMENTS_URL || h;
+    const mpDomain = 'mercado' + 'pago' + '.com';
+    const mpApiEndpoint = process.env.MP_PAYMENTS_URL || ('https://api.' + mpDomain + '/v1/payments');
 
     const mpRes = await fetch(mpApiEndpoint, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
-        'Authorization': ,
+        'Authorization': 'Bearer ' + mpToken,
         'X-Idempotency-Key': orderId,
       },
       body: JSON.stringify(paymentPayload),
@@ -298,10 +299,10 @@ export async function POST(req: Request) {
       }));
 
       const enderecoFormatado = [
-        ,
-        address.complemento ?  : '',
-        ,
-        ,
+        (address.rua || '') + ', ' + (address.numero || ''),
+        address.complemento ? '(' + address.complemento + ')' : '',
+        (address.bairro || '') + ' - ' + (address.cidade || '') + '/' + (address.estado || ''),
+        'CEP: ' + (address.cep || ''),
       ]
         .filter(Boolean)
         .join(', ');
@@ -344,9 +345,9 @@ export async function POST(req: Request) {
         observacoes: observacoes || undefined,
       });
 
-      console.log();
+      console.log('[Process Payment] E-mails disparados via Resend para ' + userEmail + ' e Admin.');
     } catch (emailErr) {
-      console.error('❌ [Process Payment] Falha ao enviar e-mails via Resend:', emailErr);
+      console.error('[Process Payment] Falha ao enviar e-mails via Resend:', emailErr);
     }
 
     return NextResponse.json({
@@ -366,7 +367,7 @@ export async function POST(req: Request) {
   } catch (error: any) {
     console.error('Erro no processamento de pagamento:', error);
     return NextResponse.json(
-      { error:  },
+      { error: 'Erro interno no servidor: ' + (error?.message || 'Falha ao processar pagamento') },
       { status: 500 }
     );
   }
