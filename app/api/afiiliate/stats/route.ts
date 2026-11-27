@@ -22,7 +22,7 @@ export async function GET(request: Request) {
       userId = userSession;
     }
 
-    // 1. Buscar usuário e checar permissão de Afiliado
+    // 1. Buscar usuário no Supabase
     const user = await prisma.user.findUnique({
       where: { id: userId },
       select: {
@@ -36,19 +36,37 @@ export async function GET(request: Request) {
       },
     });
 
-    if (!user || (!user.isAffiliate && (user.role as string) !== 'AFFILIATE' && user.role !== 'ADMIN')) {
-      return NextResponse.json({ error: 'Acesso restrito a afiliados.' }, { status: 403 });
+    // 🔒 CHECAGEM ESTRITA: Apenas usuários com isAffiliate marcado como TRUE (ou ADMIN) possuem acesso
+    if (!user || (!user.isAffiliate && user.role !== 'ADMIN')) {
+      return NextResponse.json({ error: 'Acesso restrito. Perfil não ativado como afiliado.' }, { status: 403 });
     }
 
     const cupomCodigo = user.affiliateCoupon;
 
-    // 2. Buscar pedidos vinculados ao ID do Afiliado OU ao cupom dele
+    // Se o afiliado não tiver cupom vinculado ainda, retorna resposta zerada segura
+    if (!cupomCodigo) {
+      return NextResponse.json({
+        ok: true,
+        afiliado: {
+          nome: user.nome,
+          cupom: 'SEM_CUPOM_VINCULADO',
+          porcentagemComissao: user.comissaoPorcentagem || 20,
+          totalPedidos: 0,
+          pedidosAprovadosCount: 0,
+          totalVendasBruto: 0,
+          totalComissaoAcumulada: 0,
+        },
+        vendas: [],
+      });
+    }
+
+    // 2. Buscar pedidos no banco filtrando estritamente pelo cupom do afiliado
     const orders = await prisma.order.findMany({
       where: {
-        OR: [
-          { afiliadoId: user.id },
-          ...(cupomCodigo ? [{ cupomCodigo: { equals: cupomCodigo, mode: 'insensitive' as const } }] : []),
-        ],
+        cupomCodigo: {
+          equals: cupomCodigo,
+          mode: 'insensitive',
+        },
       },
       orderBy: { createdAt: 'desc' },
     });
@@ -56,25 +74,22 @@ export async function GET(request: Request) {
     // 3. Filtrar pedidos que geram comissão (Aprovado, Enviado, Entregue)
     const pedidosValidos = orders.filter((o) => ['Aprovado', 'Enviado', 'Entregue'].includes(o.status));
     const totalVendasBruto = pedidosValidos.reduce((sum, o) => sum + (o.subtotal || o.total), 0);
-    
-    // Comissão acumulada
+
+    const taxaComissao = user.comissaoPorcentagem || 20;
+
+    // Comissão acumulada calculada de forma segura
     const totalComissaoAcumulada = pedidosValidos.reduce((sum, o) => {
-      if (o.valorComissao && o.valorComissao > 0) return sum + o.valorComissao;
-      const taxa = o.porcentagemComissao || user.comissaoPorcentagem || 10;
       const baseCalculo = o.subtotal || o.total;
-      return sum + (baseCalculo * (taxa / 100));
+      return sum + (baseCalculo * (taxaComissao / 100));
     }, 0);
 
     const vendasFormatadas = orders.map((o) => {
-      const taxa = o.porcentagemComissao || user.comissaoPorcentagem || 10;
       const baseCalculo = o.subtotal || o.total;
-      const valorComissaoCalculado = (o.valorComissao && o.valorComissao > 0)
-        ? o.valorComissao 
-        : (baseCalculo * (taxa / 100));
+      const valorComissaoCalculado = baseCalculo * (taxaComissao / 100);
 
       return {
         id: o.id,
-        orderNumber: o.id.slice(-6).toUpperCase(),
+        orderNumber: `BF-${String(o.id || '').slice(-8).toUpperCase()}`,
         data: o.createdAt,
         clienteNome: o.customerName,
         customerEmail: o.customerEmail,
@@ -83,8 +98,8 @@ export async function GET(request: Request) {
         desconto: o.desconto,
         total: o.total,
         status: o.status,
-        cupomUsado: o.cupomCodigo || cupomCodigo || 'N/A',
-        porcentagemComissao: taxa,
+        cupomUsado: o.cupomCodigo || cupomCodigo,
+        porcentagemComissao: taxaComissao,
         valorComissao: valorComissaoCalculado,
       };
     });
@@ -93,8 +108,8 @@ export async function GET(request: Request) {
       ok: true,
       afiliado: {
         nome: user.nome,
-        cupom: cupomCodigo || 'SEM_CUPOM',
-        porcentagemComissao: user.comissaoPorcentagem,
+        cupom: cupomCodigo,
+        porcentagemComissao: taxaComissao,
         totalPedidos: orders.length,
         pedidosAprovadosCount: pedidosValidos.length,
         totalVendasBruto,
@@ -103,7 +118,7 @@ export async function GET(request: Request) {
       vendas: vendasFormatadas,
     });
   } catch (error: any) {
-    console.error('Erro ao buscar estatísticas de afiliado:', error);
-    return NextResponse.json({ error: 'Erro de conexão ao carregar painel de afiliado.' }, { status: 500 });
+    console.error('❌ Erro ao buscar estatísticas de afiliado:', error);
+    return NextResponse.json({ error: 'Erro de conexão ao carregar painel de afiliado.', detalhe: error?.message }, { status: 500 });
   }
 }
