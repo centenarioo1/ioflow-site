@@ -22,7 +22,6 @@ import {
   UserCheck 
 } from 'lucide-react';
 import { useCartStore } from '@/store/useCartStore';
-//import { products as produtos } from '@/lib/products';
 import SiteHeader from '@/components/SiteHeader';
 import SiteFooter from '@/components/SiteFooter';
 import TrustBar from '@/components/TrustBar';
@@ -30,8 +29,7 @@ import WhatsAppButton from '@/components/WhatsAppButton';
 
 // Importe o tipo Product junto com a lista de produtos
 import { products as produtos, type Product } from '@/lib/products';
-
-
+import { trackEvent } from '@/lib/analytics';
 
 const faqItems = [
   { 
@@ -132,8 +130,6 @@ function WaveDivider({ flip = false, topColor, bottomColor }: { flip?: boolean; 
 function ProdutoCard({ p }: { p: typeof produtos[number] }) {
   const { addToCart } = useCartStore();
   const [adicionado, setAdicionado] = useState(false);
-  
-  // 🟢 ESTADO PARA CONTROLAR EXPANSÃO DA DESCRIÇÃO
   const [expandido, setExpandido] = useState(false);
 
   const [selectedVariant, setSelectedVariant] = useState(() => {
@@ -149,6 +145,16 @@ function ProdutoCard({ p }: { p: typeof produtos[number] }) {
   const handleAdd = (e: React.MouseEvent) => {
     e.preventDefault();
     if (!emEstoque) return;
+
+    // 🟢 RASTREIO DE CLIQUE NO PRODUTO AO CLICAR EM COMPRAR
+    try {
+      trackEvent('PRODUCT_CLICK', {
+        productId: String(p.id),
+        productName: `${p.nome} ${selectedVariant?.size ? `(${selectedVariant.size})` : ''}`,
+      });
+    } catch (err) {
+      console.warn('Erro ao registrar clique:', err);
+    }
 
     addToCart({
       id: `${p.id}-${selectedVariant?.id || selectedVariant?.size || 'default'}`,
@@ -195,13 +201,19 @@ function ProdutoCard({ p }: { p: typeof produtos[number] }) {
           <div style={{ position: 'absolute', bottom: 0, left: 0, right: 0, height: 3, background: p.acento || '#22c55e' }} />
         </div>
 
-        {/* 🟢 BLOCO DA DESCRIÇÃO COM CLIQUE EXPANSÍVEL */}
+        {/* 🟢 BLOCO DA DESCRIÇÃO COM CLIQUE EXPANSÍVEL E RASTREIO */}
         <div style={{ padding: '12px 14px 4px' }}>
           <h3 style={{ fontSize: 14.5, fontWeight: 900, color: '#132e13', margin: '0 0 4px', lineHeight: 1.25, letterSpacing: '-0.01em' }}>
             {p.nome}
           </h3>
           <p
-            onClick={() => setExpandido(!expandido)}
+            onClick={() => {
+              setExpandido(!expandido);
+              trackEvent('PRODUCT_CLICK', {
+                productId: String(p.id),
+                productName: p.nome,
+              });
+            }}
             title={expandido ? 'Clique para recolher' : 'Clique para ver a descrição completa'}
             style={{
               fontSize: 11.5,
@@ -219,7 +231,13 @@ function ProdutoCard({ p }: { p: typeof produtos[number] }) {
           </p>
           <button
             type="button"
-            onClick={() => setExpandido(!expandido)}
+            onClick={() => {
+              setExpandido(!expandido);
+              trackEvent('PRODUCT_CLICK', {
+                productId: String(p.id),
+                productName: p.nome,
+              });
+            }}
             style={{
               background: 'none',
               border: 'none',
@@ -251,6 +269,15 @@ function ProdutoCard({ p }: { p: typeof produtos[number] }) {
                   onClick={(e) => {
                     e.preventDefault();
                     setSelectedVariant(v);
+                    // 🟢 RASTREIO DE CLIQUE AO TROCAR DE TAMANHO/EMBALAGEM
+                    try {
+                      trackEvent('PRODUCT_CLICK', {
+                        productId: String(p.id),
+                        productName: `${p.nome} (${v.size})`,
+                      });
+                    } catch (err) {
+                      console.warn('Erro ao registrar clique na variante:', err);
+                    }
                   }}
                   style={{
                     padding: '3px 8px',
@@ -317,7 +344,6 @@ function ProdutoCard({ p }: { p: typeof produtos[number] }) {
   );
 }
 
-
 const INFO_CATEGORIA_MAP: Record<string, { categoria: 'substrato' | 'nutriente' | 'emenda'; fase: string; acento: string }> = {
   substratos:      { categoria: 'substrato', fase: 'Substrato',           acento: '#22c55e' },
   condicionadores: { categoria: 'substrato', fase: 'Aeração & Drenagem',  acento: '#0ea5e9' },
@@ -368,6 +394,15 @@ function formatarProdutoSupabase(p: any): Product {
 export default function HomePage() {
   const [listaProdutos, setListaProdutos] = useState<Product[]>(produtos as Product[]);
   const [faqAberto, setFaqAberto] = useState<number | null>(null);
+
+  // 🟢 REGISTRO AUTOMÁTICO DE VISITA AO SITE
+  useEffect(() => {
+    try {
+      trackEvent('VISIT');
+    } catch (err) {
+      console.warn('Erro ao registrar visita no analytics:', err);
+    }
+  }, []);
 
   useEffect(() => {
     async function carregarProdutosDoSupabase() {
