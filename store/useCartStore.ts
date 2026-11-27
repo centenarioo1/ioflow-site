@@ -1,6 +1,7 @@
 // store/useCartStore.ts
 import { create } from 'zustand';
 import { persist } from 'zustand/middleware';
+import { trackEvent } from '@/lib/analytics';
 
 export interface CartItem {
   id: string;             // id único (produto + variação)
@@ -61,7 +62,7 @@ function normalize(input: AddInput): Omit<CartItem, 'quantity'> {
     size: variacao,
     imagem,
     image: imagem,
-    dimensions: input.dimensions, // PRESOCONTROLADO: Preserva dimensões do produto no carrinho
+    dimensions: input.dimensions, // Preserva dimensões do produto no carrinho
     weight: input.weight,
   };
 }
@@ -89,10 +90,21 @@ export const useCartStore = create<CartState>()(
       openCart: () => set({ isOpen: true }),
       closeCart: () => set({ isOpen: false }),
 
-      addToCart: (input) =>
+      addToCart: (input) => {
+        const item = normalize(input);
+        const qty = Number(input.quantity) || 1;
+
+        // 🟢 REGISTRO AUTOMÁTICO DE MÉTRICA DE CARRINHO (Painel estilo Shopee)
+        try {
+          trackEvent('ADD_TO_CART', {
+            productId: item.productId || item.id,
+            productName: item.nome || item.name || 'Produto Bioflow',
+          });
+        } catch (e) {
+          console.warn('Erro ao disparar evento ADD_TO_CART:', e);
+        }
+
         set((state) => {
-          const item = normalize(input);
-          const qty = Number(input.quantity) || 1;
           const existente = state.items.find(
             (i) => i.id === item.id && (item.variacao ? i.variacao === item.variacao : true)
           );
@@ -106,7 +118,8 @@ export const useCartStore = create<CartState>()(
             };
           }
           return { items: [...state.items, { ...item, quantity: qty }] };
-        }),
+        });
+      },
 
       addItem: (input, quantity = 1) => {
         get().addToCart({ ...input, quantity: Number(input.quantity) || quantity });

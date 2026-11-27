@@ -185,3 +185,17 @@ model ProductVariant {
 
   @@map("product_variants")
 }
+
+// Adicione este model ao seu prisma/schema.prisma
+
+model AnalyticsEvent {
+  id          String   @id @default(uuid())
+  type        String   // "VISIT", "PRODUCT_CLICK", "ADD_TO_CART"
+  productId   String?  // ID do produto (opcional no caso de visita geral ao site)
+  productName String? // Nome do produto para relatórios mais rápidos
+  sessionId   String?  // Identificador da sessão do usuário
+  createdAt   DateTime @default(now())
+
+  @@index([type, createdAt])
+  @@index([productId, type, createdAt])
+}
