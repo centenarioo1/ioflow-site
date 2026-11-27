@@ -1,30 +1,21 @@
 // app/api/affiliate/stats/route.ts
 import { NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
-import { cookies } from 'next/headers';
+import { getUsuarioLogado } from '@/lib/auth';
 
 export const dynamic = 'force-dynamic';
 
-export async function GET(request: Request) {
+export async function GET() {
   try {
-    // 🟢 No Next.js 15, cookies() retorna uma Promise e exige o uso de await
-    const cookieStore = await cookies();
-    const userSession = cookieStore.get('user_session')?.value;
-    
-    if (!userSession) {
+    // 🟢 1. Autenticação oficial usando a função nativa do projeto
+    const authUser = await getUsuarioLogado();
+    if (!authUser) {
       return NextResponse.json({ error: 'Não autorizado. Faça login primeiro.' }, { status: 401 });
     }
 
-    let userId = '';
-    try {
-      userId = JSON.parse(userSession).id;
-    } catch {
-      userId = userSession;
-    }
-
-    // 1. Buscar usuário no Supabase
+    // 🟢 2. Buscar usuário no Supabase
     const user = await prisma.user.findUnique({
-      where: { id: userId },
+      where: { id: authUser.id },
       select: {
         id: true,
         nome: true,
@@ -36,14 +27,13 @@ export async function GET(request: Request) {
       },
     });
 
-    // 🔒 CHECAGEM ESTRITA: Apenas usuários com isAffiliate marcado como TRUE (ou ADMIN) possuem acesso
+    // 🔒 Checagem estrita de permissão
     if (!user || (!user.isAffiliate && user.role !== 'ADMIN')) {
-      return NextResponse.json({ error: 'Acesso restrito. Perfil não ativado como afiliado.' }, { status: 403 });
+      return NextResponse.json({ error: 'Acesso restrito a afiliados ativados.' }, { status: 403 });
     }
 
-    const cupomCodigo = user.affiliateCoupon;
+    const cupomCodigo = user.affiliateCoupon?.trim();
 
-    // Se o afiliado não tiver cupom vinculado ainda, retorna resposta zerada segura
     if (!cupomCodigo) {
       return NextResponse.json({
         ok: true,
@@ -60,7 +50,7 @@ export async function GET(request: Request) {
       });
     }
 
-    // 2. Buscar pedidos no banco filtrando estritamente pelo cupom do afiliado
+    // 🟢 3. Buscar pedidos filtrando estritamente pelo cupom (case-insensitive)
     const orders = await prisma.order.findMany({
       where: {
         cupomCodigo: {
@@ -71,32 +61,30 @@ export async function GET(request: Request) {
       orderBy: { createdAt: 'desc' },
     });
 
-    // 3. Filtrar pedidos que geram comissão (Aprovado, Enviado, Entregue)
-    const pedidosValidos = orders.filter((o) => ['Aprovado', 'Enviado', 'Entregue'].includes(o.status));
-    const totalVendasBruto = pedidosValidos.reduce((sum, o) => sum + (o.subtotal || o.total), 0);
+    // 🟢 4. Filtro flexível para aceitar qualquer variação de capitalização do status (Aprovado, aprovado, APROVADO, etc.)
+    const pedidosValidos = orders.filter((o) => {
+      const st = String(o.status || '').toLowerCase().trim();
+      return ['aprovado', 'enviado', 'entregue', 'pago', 'completed', 'approved'].includes(st);
+    });
 
+    const totalVendasBruto = pedidosValidos.reduce((sum, o) => sum + Number(o.subtotal || o.total || 0), 0);
     const taxaComissao = user.comissaoPorcentagem || 20;
-
-    // Comissão acumulada calculada de forma segura
-    const totalComissaoAcumulada = pedidosValidos.reduce((sum, o) => {
-      const baseCalculo = o.subtotal || o.total;
-      return sum + (baseCalculo * (taxaComissao / 100));
-    }, 0);
+    const totalComissaoAcumulada = totalVendasBruto * (taxaComissao / 100);
 
     const vendasFormatadas = orders.map((o) => {
-      const baseCalculo = o.subtotal || o.total;
+      const baseCalculo = Number(o.subtotal || o.total || 0);
       const valorComissaoCalculado = baseCalculo * (taxaComissao / 100);
 
       return {
         id: o.id,
         orderNumber: `BF-${String(o.id || '').slice(-8).toUpperCase()}`,
         data: o.createdAt,
-        clienteNome: o.customerName,
-        customerEmail: o.customerEmail,
+        clienteNome: o.customerName || 'Cliente',
+        customerEmail: o.customerEmail || '',
         items: o.items,
-        subtotal: o.subtotal,
-        desconto: o.desconto,
-        total: o.total,
+        subtotal: Number(o.subtotal || 0),
+        desconto: Number(o.desconto || 0),
+        total: Number(o.total || 0),
         status: o.status,
         cupomUsado: o.cupomCodigo || cupomCodigo,
         porcentagemComissao: taxaComissao,
@@ -119,6 +107,6 @@ export async function GET(request: Request) {
     });
   } catch (error: any) {
     console.error('❌ Erro ao buscar estatísticas de afiliado:', error);
-    return NextResponse.json({ error: 'Erro de conexão ao carregar painel de afiliado.', detalhe: error?.message }, { status: 500 });
+    return NextResponse.json({ error: 'Erro ao carregar estatísticas do afiliado.', detalhe: error?.message }, { status: 500 });
   }
 }
