@@ -1,23 +1,28 @@
 // app/api/admin/analytics/route.ts
 import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
-import { requireAdmin } from '@/lib/auth';
+import { getUsuarioLogado } from '@/lib/auth';
 import { products, produtos } from '@/lib/products';
+
+export const dynamic = 'force-dynamic';
 
 export async function GET(req: NextRequest) {
   try {
-    // Validação de acesso admin (se aplicável na sua arquitetura)
-    try {
-      const admin = await requireAdmin();
-      if (!admin) {
-        return NextResponse.json({ error: 'Acesso negado.' }, { status: 403 });
-      }
-    } catch {
-      // Caso a checagem use middleware ou sessão diferente, prossegue com segurança
+    // 🔒 Trava Estrita de Acesso Admin
+    const authUser = await getUsuarioLogado();
+    if (!authUser) {
+      return NextResponse.json({ error: 'Não autorizado. Faça login primeiro.' }, { status: 401 });
+    }
+
+    const adminEmail = (process.env.ADMIN_EMAIL || '').trim().toLowerCase();
+    const isAdmin = authUser.role === 'ADMIN' || (adminEmail && authUser.email?.toLowerCase() === adminEmail);
+
+    if (!isAdmin) {
+      return NextResponse.json({ error: 'Acesso negado. Rota restrita ao administrador.' }, { status: 403 });
     }
 
     const { searchParams } = new URL(req.url);
-    const periodo = searchParams.get('periodo') || 'hoje'; // 'hoje' | 'semana' | 'mes'
+    const periodo = searchParams.get('periodo') || 'hoje';
 
     const agora = new Date();
     let dataInicio = new Date();
@@ -32,7 +37,7 @@ export async function GET(req: NextRequest) {
       dataInicio.setHours(0, 0, 0, 0);
     }
 
-    // 1. Busca todos os eventos do período selecionado
+    // 1. Busca eventos na tabela AnalyticsEvent
     const eventos = await prisma.analyticsEvent.findMany({
       where: {
         createdAt: {
@@ -50,7 +55,6 @@ export async function GET(req: NextRequest) {
     const catalogo = (products || produtos || []) as any[];
     const produtoMap: Record<string, { id: string; nome: string; cliques: number; adicionadosCarrinho: number }> = {};
 
-    // Inicializa produtos do catálogo
     for (const prod of catalogo) {
       const prodId = String(prod.id);
       const prodNome = String(prod.name || prod.nome || 'Produto Bioflow');
@@ -62,7 +66,6 @@ export async function GET(req: NextRequest) {
       };
     }
 
-    // Contabiliza os eventos
     for (const evento of eventos) {
       if (!evento.productId) continue;
       const pId = String(evento.productId);
@@ -83,7 +86,6 @@ export async function GET(req: NextRequest) {
       }
     }
 
-    // Converte para lista ordenada por número de cliques ou adições ao carrinho
     const listaProdutos = Object.values(produtoMap)
       .map(p => {
         const taxaConversaoCarrinho = p.cliques > 0 

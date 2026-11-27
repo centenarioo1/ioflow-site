@@ -1,10 +1,13 @@
-// app/admin/page.tsx
+// app/admin/pedidos/page.tsx (ou app/admin/page.tsx)
 'use client';
 
 import React, { useEffect, useState, useCallback } from 'react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
-import { Loader2, Package, RefreshCw, LogOut, ShieldCheck, Plus, ListOrdered, CheckCircle2, AlertCircle, Trash2, Edit, Layers, Tag } from 'lucide-react';
+import { 
+  Loader2, Package, RefreshCw, LogOut, ShieldCheck, Plus, ListOrdered, 
+  CheckCircle2, AlertCircle, Trash2, Edit, Layers, Tag, TrendingUp 
+} from 'lucide-react';
 
 interface AdminOrder {
   id: string;
@@ -193,7 +196,7 @@ export default function AdminPage() {
     }
   };
 
-  // 🚨 REMOVER PRODUTO INTEIRO (Sem window.confirm - SSR / Vercel Safe)
+  // REMOVER PRODUTO INTEIRO
   const executarRemocaoProdutoInteiro = async (productId: string, productName: string) => {
     setConfirmandoProdId(null);
     setExcluindoId(productId);
@@ -219,7 +222,7 @@ export default function AdminPage() {
     }
   };
 
-  // 🚨 REMOVER VARIAÇÃO EXISTENTE DE UM PRODUTO (Sem window.confirm - SSR / Vercel Safe)
+  // REMOVER VARIAÇÃO EXISTENTE DE UM PRODUTO
   const executarRemocaoVariacaoExistente = async (productId: string, variantId: string, variantSize: string) => {
     setConfirmandoVarId(null);
     setExcluindoId(`${productId}-${variantId}`);
@@ -253,7 +256,7 @@ export default function AdminPage() {
     }
   };
 
-  // ➕ ADICIONAR NOVA VARIAÇÃO A UM PRODUTO EXISTENTE
+  // ADICIONAR NOVA VARIAÇÃO A UM PRODUTO EXISTENTE
   const submitNovaVariacaoExistente = async (productId: string) => {
     setAdicionandoVar(true);
     setErroProdutos('');
@@ -392,9 +395,9 @@ export default function AdminPage() {
         </div>
       </header>
 
-      {/* Navegação por Abas */}
+      {/* Navegação por Abas (100% Estilo Inline - Sem Tailwind) */}
       <div style={{ background: 'white', borderBottom: '1px solid #e7e2d6', padding: '0 20px' }}>
-        <div style={{ maxWidth: 1100, margin: '0 auto', display: 'flex', gap: 20 }}>
+        <div style={{ maxWidth: 1100, margin: '0 auto', display: 'flex', gap: 20, flexWrap: 'wrap' }}>
           <button
             onClick={() => setAbaAtiva('pedidos')}
             style={{
@@ -451,6 +454,27 @@ export default function AdminPage() {
           >
             <Plus size={16} /> Cadastrar Novo Produto
           </button>
+
+          {/* 🟢 ABA NOVA: MÉTRICAS & DESEMPENHO (SHOPEE) - SEM TAILWIND */}
+          <Link
+            href="/admin/metricas"
+            style={{
+              display: 'flex',
+              alignItems: 'center',
+              gap: 8,
+              padding: '14px 4px',
+              border: 'none',
+              borderBottom: '3px solid transparent',
+              background: 'transparent',
+              color: '#16a34a',
+              fontWeight: 800,
+              fontSize: 14,
+              cursor: 'pointer',
+              textDecoration: 'none'
+            }}
+          >
+            <TrendingUp size={16} color="#16a34a" /> 📊 Métricas & Desempenho (Shopee)
+          </Link>
         </div>
       </div>
 
@@ -589,7 +613,7 @@ export default function AdminPage() {
                         </p>
                       </div>
 
-                      {/* Botão de Excluir Produto Inteiro (Com Confirmação Inline em React) */}
+                      {/* Botão de Excluir Produto Inteiro */}
                       {confirmandoProdId === p.id ? (
                         <div style={{ display: 'flex', alignItems: 'center', gap: 6, background: '#fee2e2', padding: '6px 10px', borderRadius: 8, border: '1px solid #fca5a5' }}>
                           <span style={{ fontSize: 11, fontWeight: 900, color: '#991b1b' }}>Confirma exclusão?</span>
@@ -716,7 +740,7 @@ export default function AdminPage() {
                                   </span>
                                 </div>
 
-                                {/* Botão Excluir Variação (Com Confirmação Inline em React) */}
+                                {/* Botão Excluir Variação */}
                                 {confirmandoVarId === `${p.id}-${varKey}` ? (
                                   <div style={{ display: 'flex', alignItems: 'center', gap: 4, background: '#fef2f2', padding: '3px 8px', borderRadius: 6, border: '1px solid #fecaca' }}>
                                     <span style={{ fontSize: 10, fontWeight: 900, color: '#991b1b' }}>Excluir {v.size}?</span>
