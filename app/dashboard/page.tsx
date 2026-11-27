@@ -1,3 +1,4 @@
+// app/dashboard/page.tsx
 'use client';
 
 import React, { useEffect, useState, Suspense } from 'react';
@@ -5,7 +6,7 @@ import { useRouter, useSearchParams } from 'next/navigation';
 import Link from 'next/link';
 import { 
   Loader2, Package, LogOut, ShoppingBag, CheckCircle2, Tag, CreditCard, 
-  Clipboard, AlertCircle, User, MapPin, RefreshCw, Lock, Home, KeyRound
+  AlertCircle, User, MapPin, RefreshCw, Lock, DollarSign, TrendingUp, Award, Share2
 } from 'lucide-react';
 
 interface UserOrder {
@@ -23,6 +24,31 @@ interface UserOrder {
   mpPreferenceId?: string | null;
 }
 
+interface AffiliateData {
+  nome: string;
+  cupom: string;
+  porcentagemComissao: number;
+  totalPedidos: number;
+  pedidosAprovadosCount: number;
+  totalVendasBruto: number;
+  totalComissaoAcumulada: number;
+}
+
+interface AffiliateSale {
+  id: string;
+  orderNumber: string;
+  data: string;
+  clienteNome: string;
+  customerEmail: string;
+  subtotal: number;
+  desconto: number;
+  total: number;
+  status: string;
+  cupomUsado: string;
+  porcentagemComissao: number;
+  valorComissao: number;
+}
+
 const STATUS_CORES: Record<string, { bg: string; cor: string }> = {
   Pendente: { bg: '#fef3c7', cor: '#92400e' },
   Aprovado: { bg: '#dcfce7', cor: '#166534' },
@@ -32,20 +58,26 @@ const STATUS_CORES: Record<string, { bg: string; cor: string }> = {
   Reembolsado: { bg: '#f3e8ff', cor: '#6b21a8' },
 };
 
-const fmt = (v: number) => `R$ ${v.toFixed(2).replace('.', ',')}`;
+const fmt = (v: number) => `R$ ${Number(v || 0).toFixed(2).replace('.', ',')}`;
 
 function DashboardContent() {
   const router = useRouter();
   const searchParams = useSearchParams();
 
   // Abas do Dashboard
-  const [activeTab, setActiveTab] = useState<'pedidos' | 'dados' | 'enderecos' | 'trocas' | 'senha'>('pedidos');
+  const [activeTab, setActiveTab] = useState<'pedidos' | 'afiliado' | 'dados' | 'enderecos' | 'trocas' | 'senha'>('pedidos');
 
   const [orders, setOrders] = useState<UserOrder[]>([]);
   const [carregando, setCarregando] = useState(true);
   const [erro, setErro] = useState('');
   
-  // Dados do Comprador (Sincronizado)
+  // Estado do Afiliado
+  const [isAffiliate, setIsAffiliate] = useState(false);
+  const [affiliateData, setAffiliateData] = useState<AffiliateData | null>(null);
+  const [affiliateSales, setAffiliateSales] = useState<AffiliateSale[]>([]);
+  const [carregandoAfiliado, setCarregandoAfiliado] = useState(false);
+
+  // Dados do Comprador
   const [nome, setNome] = useState('');
   const [email, setEmail] = useState('');
   const [telefone, setTelefone] = useState('');
@@ -68,16 +100,16 @@ function DashboardContent() {
   const [senhaAtual, setSenhaAtual] = useState('');
   const [novaSenha, setNovaSenha] = useState('');
 
-  // Feedbacks de Sucesso e Erros locais
+  // Feedbacks
   const [sucessoMsg, setSucessoMsg] = useState('');
   const [erroMsg, setErroMsg] = useState('');
   const [salvando, setSalvando] = useState(false);
 
   const [pixData, setPixData] = useState<Record<string, { qrCode: string; qrCodeBase64: string; loading: boolean }>>({});
 
-  // 1. Carregamento dos dados iniciais
+  // 1. Carregamento dos dados iniciais e checagem do Afiliado
   useEffect(() => {
-    // Sincroniza dados da sessão com a API do Google (se logado por lá)
+    // Sincroniza dados da sessão
     fetch('/api/auth/me')
       .then(res => res.json())
       .then(data => {
@@ -142,10 +174,31 @@ function DashboardContent() {
       }
     };
 
+    // 🟢 Busca Dados do Painel de Afiliado
+    const carregarDadosAfiliado = async () => {
+      setCarregandoAfiliado(true);
+      try {
+        const res = await fetch('/api/affiliate/stats');
+        if (res.ok) {
+          const data = await res.json();
+          if (data.ok && data.afiliado) {
+            setIsAffiliate(true);
+            setAffiliateData(data.afiliado);
+            setAffiliateSales(data.vendas || []);
+          }
+        }
+      } catch (err) {
+        console.warn('Usuário não é afiliado ou erro ao carregar estatísticas:', err);
+      } finally {
+        setCarregandoAfiliado(false);
+      }
+    };
+
     carregarPedidos();
+    carregarDadosAfiliado();
   }, [router]);
 
-  // 2. Busca dados de Pix ativos no Mercado Pago
+  // 2. Busca dados de Pix ativos
   useEffect(() => {
     orders.forEach(order => {
       if (order.status === 'Pendente') {
@@ -186,7 +239,6 @@ function DashboardContent() {
       const data = await res.json();
       if (!res.ok) throw new Error(data.error);
 
-      // Sincroniza dados no LocalStorage
       const session = localStorage.getItem('user_session');
       const u = session ? JSON.parse(session) : {};
       localStorage.setItem('user_session', JSON.stringify({
@@ -312,10 +364,10 @@ function DashboardContent() {
         {/* Banner Olá */}
         <div style={{ marginBottom: 30 }}>
           <h1 style={{ fontSize: 24, fontWeight: 900, margin: '0 0 4px', color: '#0d2410' }}>
-            Olá, {nome ? nome.split(' ') : 'Cultivador'}!
+            Olá, {nome ? nome.split(' ')[0] : 'Cultivador'}!
           </h1>
           <p style={{ fontSize: 13.5, color: '#6b7280', margin: 0 }}>
-            Gerencie sua conta, endereços de entrega e pedidos de adubo.
+            Gerencie sua conta, acompanhe seus pedidos e suas comissões de parceiro.
           </p>
         </div>
 
@@ -343,6 +395,17 @@ function DashboardContent() {
             >
               <Package size={16} /> Meus Pedidos
             </button>
+
+            {/* 🟢 ABA DE AFILIADO (EXIBIDA SE ISAFFILIATE === TRUE) */}
+            {isAffiliate && (
+              <button 
+                onClick={() => { setActiveTab('afiliado'); setErroMsg(''); setSucessoMsg(''); }}
+                style={{ display: 'flex', alignItems: 'center', gap: 10, width: '100%', padding: '12px 14px', borderRadius: 12, border: 'none', background: activeTab === 'afiliado' ? '#fefce8' : 'transparent', color: activeTab === 'afiliado' ? '#854d0e' : '#4b5563', fontSize: 13.5, fontWeight: activeTab === 'afiliado' ? 800 : 600, cursor: 'pointer', textAlign: 'left', transition: 'all 0.15s' }}
+              >
+                <Award size={16} color="#d4a843" /> Painel de Afiliado
+              </button>
+            )}
+
             <button 
               onClick={() => { setActiveTab('dados'); setErroMsg(''); setSucessoMsg(''); }}
               style={{ display: 'flex', alignItems: 'center', gap: 10, width: '100%', padding: '12px 14px', borderRadius: 12, border: 'none', background: activeTab === 'dados' ? '#f0fdf4' : 'transparent', color: activeTab === 'dados' ? '#15803d' : '#4b5563', fontSize: 13.5, fontWeight: activeTab === 'dados' ? 800 : 600, cursor: 'pointer', textAlign: 'left', transition: 'all 0.15s' }}
@@ -466,7 +529,121 @@ function DashboardContent() {
               </div>
             )}
 
-            {/* 2. MEUS DADOS */}
+            {/* 🟢 2. PAINEL DE AFILIADO */}
+            {activeTab === 'afiliado' && (
+              <div>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 20, flexWrap: 'wrap', gap: 10 }}>
+                  <h2 style={{ fontSize: 16, fontWeight: 900, color: '#0d2410', display: 'flex', alignItems: 'center', gap: 8, margin: 0 }}>
+                    <Award size={18} color="#d4a843" /> Painel de Vendas e Comissões
+                  </h2>
+                  <span style={{ background: '#fefce8', border: '1px solid #fef08a', color: '#854d0e', fontSize: 11, fontWeight: 800, padding: '4px 10px', borderRadius: 999 }}>
+                    Parceiro Ativo BIOFLOW
+                  </span>
+                </div>
+
+                {carregandoAfiliado ? (
+                  <div style={{ textAlign: 'center', padding: 40 }}>
+                    <Loader2 size={32} className="animate-spin" color="#15803d" style={{ margin: '0 auto' }} />
+                  </div>
+                ) : affiliateData ? (
+                  <div>
+                    {/* Cards de Métricas do Afiliado */}
+                    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))', gap: 12, marginBottom: 24 }}>
+                      
+                      <div style={{ background: '#f8fafc', border: '1px solid #e2e8f0', borderRadius: 14, padding: 16 }}>
+                        <span style={{ fontSize: 11, color: '#64748b', fontWeight: 700, display: 'block', marginBottom: 4 }}>Cupom de Desconto</span>
+                        <div style={{ fontSize: 16, fontWeight: 900, color: '#0f172a', display: 'flex', alignItems: 'center', gap: 6 }}>
+                          <Tag size={16} color="#d4a843" />
+                          {affiliateData.cupom}
+                        </div>
+                      </div>
+
+                      <div style={{ background: '#f8fafc', border: '1px solid #e2e8f0', borderRadius: 14, padding: 16 }}>
+                        <span style={{ fontSize: 11, color: '#64748b', fontWeight: 700, display: 'block', marginBottom: 4 }}>Sua Comissão</span>
+                        <div style={{ fontSize: 16, fontWeight: 900, color: '#15803d' }}>
+                          {affiliateData.porcentagemComissao}% por Venda
+                        </div>
+                      </div>
+
+                      <div style={{ background: '#f8fafc', border: '1px solid #e2e8f0', borderRadius: 14, padding: 16 }}>
+                        <span style={{ fontSize: 11, color: '#64748b', fontWeight: 700, display: 'block', marginBottom: 4 }}>Total de Vendas Bruto</span>
+                        <div style={{ fontSize: 16, fontWeight: 900, color: '#0f172a' }}>
+                          {fmt(affiliateData.totalVendasBruto)}
+                        </div>
+                      </div>
+
+                      <div style={{ background: '#f0fdf4', border: '1px solid #bbf7d0', borderRadius: 14, padding: 16 }}>
+                        <span style={{ fontSize: 11, color: '#166534', fontWeight: 700, display: 'block', marginBottom: 4 }}>Comissão Acumulada</span>
+                        <div style={{ fontSize: 18, fontWeight: 900, color: '#15803d' }}>
+                          {fmt(affiliateData.totalComissaoAcumulada)}
+                        </div>
+                      </div>
+
+                    </div>
+
+                    {/* Tabela de Vendas Realizadas pelo Cupom */}
+                    <h3 style={{ fontSize: 14, fontWeight: 900, marginBottom: 12, color: '#0d2410' }}>
+                      Histórico de Vendas Geradas ({affiliateSales.length})
+                    </h3>
+
+                    {affiliateSales.length === 0 ? (
+                      <div style={{ textAlign: 'center', padding: '30px 0', background: '#f9fafb', borderRadius: 14, border: '1px dashed #d1d5db' }}>
+                        <TrendingUp size={32} color="#9ca3af" style={{ margin: '0 auto 8px' }} />
+                        <p style={{ fontSize: 13, color: '#6b7280', margin: 0 }}>Nenhuma venda realizada com seu cupom ainda.</p>
+                        <p style={{ fontSize: 11.5, color: '#9ca3af', marginTop: 4 }}>Divulgue o cupom <strong>{affiliateData.cupom}</strong> para seus clientes para acumular comissões!</p>
+                      </div>
+                    ) : (
+                      <div style={{ overflowX: 'auto', border: '1px solid #e5e7eb', borderRadius: 14 }}>
+                        <table style={{ width: '100%', borderCollapse: 'collapse', textAlign: 'left', fontSize: 12.5 }}>
+                          <thead>
+                            <tr style={{ background: '#f8fafc', borderBottom: '1px solid #e2e8f0', color: '#475569', fontWeight: 800 }}>
+                              <th style={{ padding: '10px 14px' }}>Pedido</th>
+                              <th style={{ padding: '10px 14px' }}>Data</th>
+                              <th style={{ padding: '10px 14px' }}>Cliente</th>
+                              <th style={{ padding: '10px 14px' }}>Valor</th>
+                              <th style={{ padding: '10px 14px' }}>Comissão ({affiliateData.porcentagemComissao}%)</th>
+                              <th style={{ padding: '10px 14px' }}>Status</th>
+                            </tr>
+                          </thead>
+                          <tbody>
+                            {affiliateSales.map((sale) => {
+                              const cor = STATUS_CORES[sale.status] || STATUS_CORES.Pendente;
+                              return (
+                                <tr key={sale.id} style={{ borderBottom: '1px solid #f1f5f9' }}>
+                                  <td style={{ padding: '12px 14px', fontWeight: 800, color: '#0f172a' }}>
+                                    #{sale.orderNumber}
+                                  </td>
+                                  <td style={{ padding: '12px 14px', color: '#64748b' }}>
+                                    {new Date(sale.data).toLocaleDateString('pt-BR')}
+                                  </td>
+                                  <td style={{ padding: '12px 14px', color: '#334155', fontWeight: 600 }}>
+                                    {sale.clienteNome}
+                                  </td>
+                                  <td style={{ padding: '12px 14px', fontWeight: 700, color: '#0f172a' }}>
+                                    {fmt(sale.subtotal || sale.total)}
+                                  </td>
+                                  <td style={{ padding: '12px 14px', fontWeight: 900, color: '#15803d' }}>
+                                    + {fmt(sale.valorComissao)}
+                                  </td>
+                                  <td style={{ padding: '12px 14px' }}>
+                                    <span style={{ background: cor.bg, color: cor.cor, fontSize: 10.5, fontWeight: 900, padding: '2px 8px', borderRadius: 999 }}>
+                                      {sale.status}
+                                    </span>
+                                  </td>
+                                </tr>
+                              );
+                            })}
+                          </tbody>
+                        </table>
+                      </div>
+                    )}
+
+                  </div>
+                ) : null}
+              </div>
+            )}
+
+            {/* 3. MEUS DADOS */}
             {activeTab === 'dados' && (
               <form onSubmit={handleAtualizarDados}>
                 <h2 style={{ fontSize: 16, fontWeight: 900, marginBottom: 20, color: '#0d2410', display: 'flex', alignItems: 'center', gap: 8 }}>
@@ -502,7 +679,7 @@ function DashboardContent() {
               </form>
             )}
 
-            {/* 3. MEUS ENDEREÇOS */}
+            {/* 4. MEUS ENDEREÇOS */}
             {activeTab === 'enderecos' && (
               <form onSubmit={handleSalvarEndereco}>
                 <h2 style={{ fontSize: 16, fontWeight: 900, marginBottom: 20, color: '#0d2410', display: 'flex', alignItems: 'center', gap: 8 }}>
@@ -554,7 +731,7 @@ function DashboardContent() {
               </form>
             )}
 
-            {/* 4. TROCAS E DEVOLUÇÕES */}
+            {/* 5. TROCAS E DEVOLUÇÕES */}
             {activeTab === 'trocas' && (
               <form onSubmit={handleTrocaDevolucao}>
                 <h2 style={{ fontSize: 16, fontWeight: 900, marginBottom: 12, color: '#0d2410', display: 'flex', alignItems: 'center', gap: 8 }}>
@@ -582,7 +759,7 @@ function DashboardContent() {
               </form>
             )}
 
-            {/* 5. ALTERAR SENHA */}
+            {/* 6. ALTERAR SENHA */}
             {activeTab === 'senha' && (
               <form onSubmit={handleAlterarSenha}>
                 <h2 style={{ fontSize: 16, fontWeight: 900, marginBottom: 20, color: '#0d2410', display: 'flex', alignItems: 'center', gap: 8 }}>
