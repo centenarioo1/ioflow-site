@@ -123,6 +123,7 @@ export default function AdminAnalyticsPage() {
         </div>
         <div style={{ display: 'flex', gap: 8 }}>
           <button
+            type="button"
             onClick={() => carregarMetricas(periodo)}
             style={{ display: 'flex', alignItems: 'center', gap: 6, background: 'rgba(255,255,255,0.1)', color: 'white', border: '1px solid rgba(255,255,255,0.2)', borderRadius: 8, padding: '8px 14px', fontSize: 12, fontWeight: 800, cursor: 'pointer' }}
           >
@@ -132,6 +133,7 @@ export default function AdminAnalyticsPage() {
             Ver Loja
           </Link>
           <button
+            type="button"
             onClick={sair}
             style={{ display: 'flex', alignItems: 'center', gap: 6, background: '#dc2626', color: 'white', border: 'none', borderRadius: 8, padding: '8px 14px', fontSize: 12, fontWeight: 800, cursor: 'pointer' }}
           >
@@ -212,6 +214,7 @@ export default function AdminAnalyticsPage() {
           {/* Seletor de Período */}
           <div style={{ display: 'flex', alignItems: 'center', background: 'white', border: '1px solid #e2e8f0', borderRadius: 12, padding: 4, boxShadow: '0 1px 3px rgba(0,0,0,0.05)' }}>
             <button
+              type="button"
               onClick={() => setPeriodo('hoje')}
               style={{
                 padding: '8px 16px',
@@ -228,6 +231,7 @@ export default function AdminAnalyticsPage() {
               📅 Hoje
             </button>
             <button
+              type="button"
               onClick={() => setPeriodo('semana')}
               style={{
                 padding: '8px 16px',
@@ -244,6 +248,7 @@ export default function AdminAnalyticsPage() {
               🗓️ Esta Semana
             </button>
             <button
+              type="button"
               onClick={() => setPeriodo('mes')}
               style={{
                 padding: '8px 16px',
@@ -359,6 +364,7 @@ export default function AdminAnalyticsPage() {
               </div>
 
               <button
+                type="button"
                 onClick={() => carregarMetricas(periodo)}
                 style={{
                   background: '#f1f5f9',
@@ -387,7 +393,7 @@ export default function AdminAnalyticsPage() {
                   <th style={{ padding: '12px 16px', fontWeight: 800 }}>Produto</th>
                   <th style={{ padding: '12px 16px', fontWeight: 800, textAlign: 'center' }}>Cliques (Visualizações)</th>
                   <th style={{ padding: '12px 16px', fontWeight: 800, textAlign: 'center' }}>Adicionados ao Carrinho</th>
-                  <th style={{ padding: '12px 16px', fontWeight 800, textAlign: 'center' }}>Taxa de Retenção (%)</th>
+                  <th style={{ padding: '12px 16px', fontWeight: 800, textAlign: 'center' }}>Taxa de Retenção (%)</th>
                 </tr>
               </thead>
               <tbody>
