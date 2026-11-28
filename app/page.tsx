@@ -1,3 +1,7 @@
+// ==========================================
+// ARQUIVO FONTE ORIGINAL: app\page.tsx
+// ==========================================
+
 // app/page.tsx
 'use client';
 
@@ -175,7 +179,20 @@ function ProdutoCard({ p }: { p: typeof produtos[number] }) {
 
   return (
     <div className="card-produto">
-      <div style={{ color: 'inherit', display: 'block' }}>
+      <div 
+        onClick={() => {
+          setExpandido(!expandido);
+          try {
+            trackEvent('PRODUCT_CLICK', {
+              productId: String(p.id),
+              productName: p.nome,
+            });
+          } catch (err) {
+            console.warn('Erro ao registrar clique no card:', err);
+          }
+        }}
+        style={{ color: 'inherit', display: 'block', cursor: 'pointer' }}
+      >
         <div style={{ position: 'relative', overflow: 'hidden' }}>
           <ImagemProduto src={p.imagens.at(0) || ''} alt={p.nome} categoria={p.categoria} />
           <div style={{ position: 'absolute', inset: 0, pointerEvents: 'none', background: 'linear-gradient(to top, rgba(0,0,0,0.15) 0%, transparent 40%)' }} />

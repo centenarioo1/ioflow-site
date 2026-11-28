@@ -1,3 +1,7 @@
+// ==========================================
+// ARQUIVO FONTE ORIGINAL: app\carrinho\page.tsx
+// ==========================================
+
 // app/carrinho/page.tsx
 'use client';
 
@@ -378,12 +382,12 @@ export default function CarrinhoPage() {
           Meu Carrinho & Checkout
         </h1>
 
-        <div style={{ background: possuiFreteGratis ? '#dcfce7' : '#fef3c7', border: possuiFreteGratis ? '1px solid #86efac' : '1px solid #fde68a', color: possuiFreteGratis ? '#166534' : '#92400e', padding: '12px 18px', borderRadius: 12, fontSize: 13, fontWeight: 800, marginBottom: 20, display: 'flex', alignItems: 'center', gap: 8 }}>
+        <div style={{ background: (possuiFreteGratis || isFreteSelecionadoGratis) ? '#dcfce7' : '#fef3c7', border: (possuiFreteGratis || isFreteSelecionadoGratis) ? '1px solid #86efac' : '1px solid #fde68a', color: (possuiFreteGratis || isFreteSelecionadoGratis) ? '#166534' : '#92400e', padding: '12px 18px', borderRadius: 12, fontSize: 13, fontWeight: 800, marginBottom: 20, display: 'flex', alignItems: 'center', gap: 8 }}>
           <Truck size={18} />
-          {isFreteSelecionadoGratis ? (
+          {(possuiFreteGratis || isFreteSelecionadoGratis) ? (
             <span>Parabéns! Seu pedido ganhou <strong>FRETE GRÁTIS</strong>!</span>
           ) : (
-            <span>Faltam <strong>{fmt(129.0 - subtotalLiquido)}</strong> para você ganhar <strong>FRETE GRÁTIS</strong>!</span>
+            <span>Faltam <strong>{fmt(Math.max(0, 129.0 - subtotalLiquido))}</strong> para você ganhar <strong>FRETE GRÁTIS</strong>!</span>
           )}
         </div>
 
