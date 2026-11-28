@@ -1,10 +1,12 @@
 // app/produtos/page.tsx
 'use client';
 
+export const dynamic = 'force-dynamic';
+
 import React, { useState, useEffect, Suspense } from 'react';
 import { useSearchParams } from 'next/navigation';
 import { ShoppingCart, Check, Search } from 'lucide-react';
-import { produtos, categorias, Product, ProductVariant } from '@/lib/products';
+import { products as fallbackProdutos, categorias, Product, ProductVariant } from '@/lib/products';
 import { useCartStore } from '@/store/useCartStore';
 import SiteHeader from '@/components/SiteHeader';
 import SiteFooter from '@/components/SiteFooter';
@@ -12,13 +14,76 @@ import CartDrawer from '@/components/CartDrawer';
 import TrustBar from '@/components/TrustBar';
 import WhatsAppButton from '@/components/WhatsAppButton';
 
+const INFO_CATEGORIA_MAP: Record<string, { categoria: Product['categoria']; fase: string; acento: string }> = {
+  substratos:      { categoria: 'substrato', fase: 'Substrato',           acento: '#22c55e' },
+  condicionadores: { categoria: 'substrato', fase: 'Aeração & Drenagem',  acento: '#0ea5e9' },
+  fertilizantes:   { categoria: 'nutriente', fase: 'Nutrição Líquida',    acento: '#d4a843' },
+  adubos:          { categoria: 'emenda',    fase: 'Adubo Orgânico',      acento: '#b45309' },
+  minerais:        { categoria: 'mineral',   fase: 'Insumo Mineral',      acento: '#a855f7' },
+};
+
+function formatarProdutoSupabase(p: any): Product {
+  const info = INFO_CATEGORIA_MAP[p.category] || { categoria: 'substrato', fase: 'Produto', acento: '#22c55e' };
+  
+  const sortedVariants = p.variants
+    ? [...p.variants].sort((a: any, b: any) => {
+        const wA = Number(a.weight || 0);
+        const wB = Number(b.weight || 0);
+        if (wA > 0 && wB > 0 && wA !== wB) return wA - wB;
+        return Number(a.price || 0) - Number(b.price || 0);
+      })
+    : [];
+
+  const disponiveis = sortedVariants.filter((v: any) => Number(v.stock) > 0);
+  const base = disponiveis.length > 0 ? disponiveis : sortedVariants;
+  const maisBarata = base.length > 0 ? base[0] : { price: 0, originalPrice: 0 };
+  const estoqueTotal = sortedVariants.reduce((acc: number, v: any) => acc + (Number(v.stock) || 0), 0);
+
+  return {
+    id: p.id,
+    name: p.name,
+    nome: p.name,
+    slug: p.slug,
+    category: p.category,
+    categoria: info.categoria,
+    subtitulo: sortedVariants.map((v: any) => v.size).join(' · '),
+    description: p.description || '',
+    descricao: p.description || '',
+    descricaoCurta: p.description || '',
+    features: p.features || [],
+    tags: [...(p.features || []), info.fase, p.category],
+    images: p.images || [],
+    imagens: p.images || [],
+    variants: sortedVariants.map((v: any) => ({
+      id: v.id,
+      size: v.size,
+      price: Number(v.price || 0),
+      originalPrice: Number(v.originalPrice || 0),
+      stock: Number(v.stock || 0),
+      weight: Number(v.weight || 0),
+      dimensions: {
+        height: Number(v.dimensions?.height || v.height || 10),
+        width: Number(v.dimensions?.width || v.width || 20),
+        length: Number(v.dimensions?.length || v.length || 30),
+      },
+    })),
+    preco: Number(maisBarata.price || 0),
+    precoOriginal: Number(maisBarata.originalPrice || 0),
+    fase: info.fase,
+    acento: info.acento,
+    estoque: estoqueTotal,
+    emEstoque: estoqueTotal > 0,
+  } as Product;
+}
+
 function CatalogoContent() {
   const searchParams = useSearchParams();
   const catUrl = searchParams.get('cat');
 
+  const [listaProdutos, setListaProdutos] = useState<Product[]>(fallbackProdutos as Product[]);
   const [categoriaAtiva, setCategoriaAtiva] = useState<string>(catUrl || 'todos');
   const [busca, setBusca] = useState('');
-  const [adicionadoId, setAdicionadoId] = useState<string | null>(null); // produtoId-variantId
+  const [adicionadoId, setAdicionadoId] = useState<string | null>(null);
   const [variantesSelecionadas, setVariantesSelecionadas] = useState<Record<string, string>>({});
   const { addToCart } = useCartStore();
 
@@ -28,9 +93,27 @@ function CatalogoContent() {
     }
   }, [catUrl]);
 
+  // 🟢 BUSCA PRODUTOS EM TEMPO REAL DIRETO DO SUPABASE
+  useEffect(() => {
+    async function carregarProdutosDoSupabase() {
+      try {
+        const res = await fetch('/api/admin/products', { cache: 'no-store' });
+        if (!res.ok) return;
+        const data = await res.json();
+        if (data.ok && Array.isArray(data.products)) {
+          const formatados = data.products.map(formatarProdutoSupabase);
+          setListaProdutos(formatados);
+        }
+      } catch (err) {
+        console.error('Erro ao conectar ao Supabase no catálogo:', err);
+      }
+    }
+    carregarProdutosDoSupabase();
+  }, []);
+
   const buscaLower = busca.toLowerCase();
 
-  const produtosFiltrados = produtos.filter((p) => {
+  const produtosFiltrados = listaProdutos.filter((p) => {
     const matchCat = categoriaAtiva === 'todos' ? true : p.categoria === categoriaAtiva;
     const matchBusca =
       (p.nome || '').toLowerCase().includes(buscaLower) ||
@@ -41,11 +124,10 @@ function CatalogoContent() {
 
   const getVarianteAtiva = (p: Product): ProductVariant => {
     const idSelecionado = variantesSelecionadas[p.id];
-    const escolhida = p.variants.find((v) => v.id === idSelecionado);
+    const escolhida = p.variants?.find((v) => v.id === idSelecionado);
     if (escolhida) return escolhida;
-    const primeiraDisponivel = p.variants.find((v) => v.stock > 0);
-    // 🟢 Resolvido com .at(0) para blindar contra remoção de colchetes no chat
-    return primeiraDisponivel || (p.variants.at(0) as ProductVariant);
+    const primeiraDisponivel = p.variants?.find((v) => v.stock > 0);
+    return primeiraDisponivel || (p.variants?.at(0) as ProductVariant);
   };
 
   const handleSelecionarVariante = (produtoId: string, varianteId: string) => {
@@ -53,12 +135,12 @@ function CatalogoContent() {
   };
 
   const handleComprar = (p: Product, variante: ProductVariant) => {
-    if (variante.stock <= 0) return;
+    if (!variante || variante.stock <= 0) return;
 
     addToCart({
-      id: `${p.id}-${variante.id}`,
+      id: `${p.id}-${variante.id || variante.size}`,
       productId: p.id,
-      variantId: variante.id,
+      variantId: variante.id || variante.size,
       name: p.nome,
       size: variante.size,
       price: variante.price,
@@ -66,10 +148,10 @@ function CatalogoContent() {
       quantity: 1,
       weight: variante.weight,
       dimensions: variante.dimensions,
-      image: p.imagens.at(0) || '', // 🟢 Resolvido com .at(0)
+      image: p.imagens.at(0) || '',
     });
 
-    setAdicionadoId(`${p.id}-${variante.id}`);
+    setAdicionadoId(`${p.id}-${variante.id || variante.size}`);
     setTimeout(() => setAdicionadoId(null), 1400);
   };
 
@@ -131,9 +213,10 @@ function CatalogoContent() {
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(250px, 1fr))', gap: 18 }}>
           {produtosFiltrados.map((p) => {
             const variante = getVarianteAtiva(p);
-            const isAdded = adicionadoId === `${p.id}-${variante.id}`;
-            const emEstoque = variante.stock > 0;
-            const desconto = variante.originalPrice > variante.price
+            const variantKey = variante?.id || variante?.size || 'default';
+            const isAdded = adicionadoId === `${p.id}-${variantKey}`;
+            const emEstoque = variante ? variante.stock > 0 : false;
+            const desconto = (variante && variante.originalPrice > variante.price)
               ? Math.round((1 - variante.price / variante.originalPrice) * 100)
               : 0;
 
@@ -151,11 +234,10 @@ function CatalogoContent() {
                   boxShadow: '0 4px 12px rgba(0,0,0,0.03)',
                 }}
               >
-                {/* 🟢 CARD CONVENCIONAL SEM COMPONENTE LINK (BLOQUEIA O CLIQUE) */}
-                <div style={{ color: 'inherit' }}>
+                <div>
                   <div style={{ height: 160, background: '#f0ece4', display: 'flex', alignItems: 'center', justifyContent: 'center', position: 'relative' }}>
                     <img
-                      src={p.imagens.at(0) || ''} // 🟢 Resolvido com .at(0)
+                      src={p.imagens?.at(0) || ''}
                       alt={p.nome}
                       style={{ width: '100%', height: '100%', objectFit: 'cover' }}
                       onError={(e) => {
@@ -184,52 +266,54 @@ function CatalogoContent() {
                   </div>
                 </div>
 
-                {/* SELETOR DE VARIANTES (TAMANHO / PESO) */}
-                <div style={{ padding: '4px 16px 8px' }}>
-                  <span style={{ fontSize: 10, fontWeight: 800, color: '#9a8e78', textTransform: 'uppercase', letterSpacing: '0.05em', display: 'block', marginBottom: 6 }}>
-                    Escolha o tamanho:
-                  </span>
-                  <div style={{ display: 'flex', gap: 5, flexWrap: 'wrap' }}>
-                    {p.variants.map((v) => {
-                      const ativo = variante.id === v.id;
-                      const semEstoque = v.stock <= 0;
-                      return (
-                        <button
-                          key={v.id}
-                          type="button"
-                          disabled={semEstoque}
-                          onClick={() => handleSelecionarVariante(p.id, v.id)}
-                          title={semEstoque ? 'Tamanho esgotado' : `Selecionar ${v.size}`}
-                          style={{
-                            padding: '4px 10px',
-                            borderRadius: 6,
-                            fontSize: 11,
-                            fontWeight: 800,
-                            cursor: semEstoque ? 'not-allowed' : 'pointer',
-                            border: ativo ? '1.5px solid #15803d' : '1px solid #e5e0d3',
-                            background: ativo ? '#15803d' : semEstoque ? '#f3f4f6' : '#faf8f5',
-                            color: ativo ? '#ffffff' : semEstoque ? '#9ca3af' : '#4a4336',
-                            textDecoration: semEstoque ? 'line-through' : 'none',
-                            transition: 'all 0.15s ease',
-                          }}
-                        >
-                          {v.size}
-                        </button>
-                      );
-                    })}
+                {/* SELETOR DE VARIANTES */}
+                {p.variants && p.variants.length > 0 && (
+                  <div style={{ padding: '4px 16px 8px' }}>
+                    <span style={{ fontSize: 10, fontWeight: 800, color: '#9a8e78', textTransform: 'uppercase', letterSpacing: '0.05em', display: 'block', marginBottom: 6 }}>
+                      Escolha o tamanho:
+                    </span>
+                    <div style={{ display: 'flex', gap: 5, flexWrap: 'wrap' }}>
+                      {p.variants.map((v) => {
+                        const ativo = variante?.id === v.id || variante?.size === v.size;
+                        const semEstoque = v.stock <= 0;
+                        return (
+                          <button
+                            key={v.id || v.size}
+                            type="button"
+                            disabled={semEstoque}
+                            onClick={() => handleSelecionarVariante(p.id, v.id || v.size)}
+                            title={semEstoque ? 'Tamanho esgotado' : `Selecionar ${v.size}`}
+                            style={{
+                              padding: '4px 10px',
+                              borderRadius: 6,
+                              fontSize: 11,
+                              fontWeight: 800,
+                              cursor: semEstoque ? 'not-allowed' : 'pointer',
+                              border: ativo ? '1.5px solid #15803d' : '1px solid #e5e0d3',
+                              background: ativo ? '#15803d' : semEstoque ? '#f3f4f6' : '#faf8f5',
+                              color: ativo ? '#ffffff' : semEstoque ? '#9ca3af' : '#4a4336',
+                              textDecoration: semEstoque ? 'line-through' : 'none',
+                              transition: 'all 0.15s ease',
+                            }}
+                          >
+                            {v.size}
+                          </button>
+                        );
+                      })}
+                    </div>
                   </div>
-                </div>
+                )}
 
                 <div style={{ padding: '12px 16px 16px', borderTop: '1px solid #f8f6f0', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
                   <div>
                     <span style={{ fontSize: 10, color: '#9a8e78', display: 'block' }}>
-                      {`Embalagem ${variante.size}`}
+                      {variante?.size ? `Embalagem ${variante.size}` : 'À vista'}
                     </span>
                     <div style={{ display: 'flex', alignItems: 'baseline', gap: 5 }}>
                       <span style={{ fontSize: 18, fontWeight: 900, color: '#132e13' }}>
-                        R$ {variante.price.toFixed(2).replace('.', ',')}
+                        R$ {(variante?.price || p.preco || 0).toFixed(2).replace('.', ',')}
                       </span>
-                      {desconto > 0 && (
+                      {desconto > 0 && variante && (
                         <span style={{ fontSize: 11, color: '#a89d89', textDecoration: 'line-through' }}>
                           R$ {variante.originalPrice.toFixed(2).replace('.', ',')}
                         </span>
@@ -273,7 +357,7 @@ function CatalogoContent() {
 
 export default function ProdutosPage() {
   return (
-    <div style={{ fontFamily: "'Inter', sans-serif", background: '#f7f3ed', minHeight: '100vh', paddingTop: 64 }}>
+    <div style={{ fontFamily: "'Inter', sans-serif", background: '#f7f3ed', minHeight: '100vh', paddingTop: 102 }}>
       <SiteHeader />
       <CartDrawer />
 
