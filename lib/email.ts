@@ -1,4 +1,3 @@
-// lib/email.ts
 import { Resend } from 'resend';
 
 interface ItemPedido {
@@ -44,6 +43,17 @@ interface DadosEmailAdmin {
   observacoes?: string;
 }
 
+interface DadosEmailBoasVindas {
+  emailCliente: string;
+  nomeCliente: string;
+}
+
+interface DadosEmailRedefinicao {
+  emailCliente: string;
+  nomeCliente: string;
+  resetLink: string;
+}
+
 function getResendClient() {
   const apiKey = process.env.RESEND_API_KEY;
   if (!apiKey) {
@@ -52,6 +62,8 @@ function getResendClient() {
   }
   return new Resend(apiKey);
 }
+
+const getRemetente = () => process.env.EMAIL_REMETENTE || 'Bioflow Orgânicos <vendas@biofloworganicos.com.br>';
 
 /**
  * 🟢 E-MAIL 1: Enviado imediatamente no momento da compra (Aguardando Pagamento)
@@ -103,7 +115,7 @@ export async function enviarEmailPedidoCriado(dados: DadosEmailPedidoCriado) {
       `
       : '';
 
-    const urlBotao = linkPagamento || '[suspicious link removed]';
+    const urlBotao = linkPagamento || 'https://biofloworganicos.com.br/dashboard';
     const textoBotao = codigoPix ? 'Já Paguei / Ver Pedido' : 'Pagar com Cartão / Ver Pedido';
 
     const htmlTemplate = `
@@ -170,10 +182,8 @@ export async function enviarEmailPedidoCriado(dados: DadosEmailPedidoCriado) {
       </div>
     `;
 
-    const remetente = process.env.EMAIL_REMETENTE || 'Bioflow Orgânicos <vendas@biofloworganicos.com.br>';
-
     const response = await resend.emails.send({
-      from: remetente,
+      from: getRemetente(),
       to: [emailCliente],
       subject: `📋 Pedido #${numeroPedido} Recebido! - Bioflow Orgânicos`,
       html: htmlTemplate,
@@ -265,7 +275,7 @@ export async function enviarEmailConfirmacaoPedido(dados: DadosEmailConfirmacao)
             ${enderecoHtml}
 
             <div style="text-align: center; margin-top: 30px;">
-              <a href="[suspicious link removed]" style="background-color: #15803d; color: #ffffff; padding: 12px 24px; text-decoration: none; border-radius: 10px; font-weight: 800; font-size: 13px; display: inline-block;">
+              <a href="https://biofloworganicos.com.br/dashboard" style="background-color: #15803d; color: #ffffff; padding: 12px 24px; text-decoration: none; border-radius: 10px; font-weight: 800; font-size: 13px; display: inline-block;">
                 Acompanhar Status no Painel
               </a>
             </div>
@@ -279,10 +289,8 @@ export async function enviarEmailConfirmacaoPedido(dados: DadosEmailConfirmacao)
       </div>
     `;
 
-    const remetente = process.env.EMAIL_REMETENTE || 'Bioflow Orgânicos <vendas@biofloworganicos.com.br>';
-
     const response = await resend.emails.send({
-      from: remetente,
+      from: getRemetente(),
       to: [emailCliente],
       subject: `✅ Pagamento Confirmado! Pedido #${numeroPedido} - Bioflow Orgânicos`,
       html: htmlTemplate,
@@ -381,10 +389,8 @@ export async function enviarEmailAdminNovoPedido(dados: DadosEmailAdmin) {
       </div>
     `;
 
-    const remetente = process.env.EMAIL_REMETENTE || 'Bioflow Orgânicos <vendas@biofloworganicos.com.br>';
-
     const response = await resend.emails.send({
-      from: remetente,
+      from: getRemetente(),
       to: [emailAdminDestino],
       subject: `🚨 [NOVO PEDIDO] #${dados.numeroPedido} - R$ ${dados.valorTotal.toFixed(2).replace('.', ',')} (${dados.nomeCliente})`,
       html: htmlTemplate,
@@ -395,5 +401,118 @@ export async function enviarEmailAdminNovoPedido(dados: DadosEmailAdmin) {
   } catch (err: any) {
     console.error('❌ [Email Service] Erro ao enviar e-mail ao Admin:', err);
     return { ok: false, error: err.message };
+  }
+}
+
+/**
+ * 🟢 E-MAIL 4: Enviado no cadastro do usuário (Boas-Vindas)
+ */
+export async function enviarEmailBoasVindas(dados: DadosEmailBoasVindas) {
+  try {
+    const resend = getResendClient();
+    if (!resend) return { ok: false, error: 'RESEND_API_KEY ausente' };
+
+    const { emailCliente, nomeCliente } = dados;
+
+    const htmlTemplate = `
+      <div style="font-family: 'Helvetica Neue', Helvetica, Arial, sans-serif; background-color: #f7f4ee; padding: 30px 10px; color: #1f2937;">
+        <div style="max-width: 600px; margin: 0 auto; background-color: #ffffff; border-radius: 16px; overflow: hidden; border: 1px solid #e7e2d6; box-shadow: 0 4px 20px rgba(0,0,0,0.03);">
+          
+          <div style="background-color: #0d2410; padding: 28px; text-align: center;">
+            <h1 style="color: #ffffff; margin: 0; font-size: 26px; font-weight: 900; letter-spacing: 1px;">
+              BIOFLOW<span style="color: #d4a843;">.</span>
+            </h1>
+            <p style="color: #4ade80; font-size: 13.5px; margin: 8px 0 0; font-weight: 700;">
+              Seja muito bem-vindo à nossa comunidade! 🌿
+            </p>
+          </div>
+
+          <div style="padding: 32px 28px;">
+            <h2 style="color: #0d2410; font-size: 19px; margin-top: 0;">Olá, ${nomeCliente}! 🌱</h2>
+            <p style="color: #4b5563; font-size: 14.5px; line-height: 1.6;">
+              É um imenso prazer ter você conosco! Sua conta na <strong>Bioflow Produtos Orgânicos</strong> foi criada com sucesso.
+            </p>
+
+            <div style="background-color: #f0fdf4; border: 1px solid #bbf7d0; border-radius: 12px; padding: 18px; margin: 24px 0; text-align: center;">
+              <p style="margin: 0 0 6px; color: #166534; font-weight: 800; font-size: 15px;">💚 Seu Cupom Especial de Boas-Vindas:</p>
+              <div style="display: inline-block; background-color: #ffffff; border: 2px dashed #16a34a; padding: 8px 20px; border-radius: 8px; color: #15803d; font-weight: 900; font-size: 18px; letter-spacing: 1px; margin-top: 4px;">
+                BIOFLOW15
+              </div>
+              <p style="margin: 8px 0 0; color: #15803d; font-size: 12.5px;">Aproveite 15% OFF em sua primeira compra no site!</p>
+            </div>
+
+            <div style="text-align: center; margin-top: 30px;">
+              <a href="https://biofloworganicos.com.br/produtos" style="background-color: #15803d; color: #ffffff; padding: 13px 28px; text-decoration: none; border-radius: 10px; font-weight: 800; font-size: 14px; display: inline-block;">
+                Explorar Catálogo de Produtos
+              </a>
+            </div>
+          </div>
+
+          <div style="background-color: #faf8f5; padding: 18px; text-align: center; border-top: 1px solid #e7e2d6; font-size: 11.5px; color: #9ca3af;">
+            <p style="margin: 0;">BIOFLOW Orgânicos — Nutrição Organomineral de Precisão</p>
+          </div>
+
+        </div>
+      </div>
+    `;
+
+    const response = await resend.emails.send({
+      from: getRemetente(),
+      to: [emailCliente],
+      subject: `🌱 Bem-vindo à Bioflow Orgânicos, ${nomeCliente}!`,
+      html: htmlTemplate,
+    });
+
+    console.log('✅ [Email Service] E-mail de boas-vindas enviado:', response);
+    return { ok: true, data: response };
+  } catch (error: any) {
+    console.error('❌ [Email Service] Erro ao enviar e-mail de boas-vindas:', error);
+    return { ok: false, error: error.message };
+  }
+}
+
+/**
+ * 🟢 E-MAIL 5: Enviado para Redefinição de Senha
+ */
+export async function enviarEmailRedefinicaoSenha(dados: DadosEmailRedefinicao) {
+  try {
+    const resend = getResendClient();
+    if (!resend) return { ok: false, error: 'RESEND_API_KEY ausente' };
+
+    const { emailCliente, nomeCliente, resetLink } = dados;
+
+    const htmlTemplate = `
+      <div style="font-family: 'Helvetica Neue', Helvetica, Arial, sans-serif; background-color: #f7f4ee; padding: 30px 10px; color: #1f2937;">
+        <div style="max-width: 600px; margin: 0 auto; background-color: #ffffff; border-radius: 16px; overflow: hidden; border: 1px solid #e7e2d6;">
+          <div style="background-color: #0d2410; padding: 24px; text-align: center;">
+            <h1 style="color: #ffffff; margin: 0; font-size: 24px; font-weight: 900;">BIOFLOW<span style="color: #d4a843;">.</span></h1>
+            <p style="color: #facc15; font-size: 13px; margin: 6px 0 0; font-weight: 700;">Solicitação de Redefinição de Senha 🔐</p>
+          </div>
+          <div style="padding: 30px 24px;">
+            <h2 style="color: #0d2410; font-size: 18px; margin-top: 0;">Olá, ${nomeCliente}!</h2>
+            <p style="color: #4b5563; font-size: 14px; line-height: 1.5;">Recebemos uma solicitação para redefinir a senha da sua conta na Bioflow Orgânicos.</p>
+            <div style="text-align: center; margin: 28px 0;">
+              <a href="${resetLink}" style="background-color: #15803d; color: #ffffff; padding: 13px 26px; text-decoration: none; border-radius: 10px; font-weight: 800; font-size: 13.5px; display: inline-block;">
+                Redefinir Minha Senha
+              </a>
+            </div>
+            <p style="color: #9ca3af; font-size: 12px;">Se você não solicitou, por favor ignore este e-mail.</p>
+          </div>
+        </div>
+      </div>
+    `;
+
+    const response = await resend.emails.send({
+      from: getRemetente(),
+      to: [emailCliente],
+      subject: `🔐 Redefinição de Senha - Bioflow Orgânicos`,
+      html: htmlTemplate,
+    });
+
+    console.log('✅ [Email Service] E-mail de redefinição enviado:', response);
+    return { ok: true, data: response };
+  } catch (error: any) {
+    console.error('❌ [Email Service] Erro ao enviar e-mail de redefinição:', error);
+    return { ok: false, error: error.message };
   }
 }
