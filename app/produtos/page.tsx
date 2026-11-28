@@ -1,30 +1,21 @@
 // app/produtos/page.tsx
 'use client';
 
-export const dynamic = 'force-dynamic';
-
 import React, { useState, useEffect, Suspense } from 'react';
 import { useSearchParams } from 'next/navigation';
 import { ShoppingCart, Check, Search } from 'lucide-react';
-import { products as fallbackProdutos, categorias, Product, ProductVariant } from '@/lib/products';
+import { products as fallbackProducts, categorias, Product, ProductVariant } from '@/lib/products';
 import { useCartStore } from '@/store/useCartStore';
+import { trackEvent } from '@/lib/analytics';
 import SiteHeader from '@/components/SiteHeader';
 import SiteFooter from '@/components/SiteFooter';
 import CartDrawer from '@/components/CartDrawer';
 import TrustBar from '@/components/TrustBar';
 import WhatsAppButton from '@/components/WhatsAppButton';
 
-const INFO_CATEGORIA_MAP: Record<string, { categoria: Product['categoria']; fase: string; acento: string }> = {
-  substratos:      { categoria: 'substrato', fase: 'Substrato',           acento: '#22c55e' },
-  condicionadores: { categoria: 'substrato', fase: 'Aeração & Drenagem',  acento: '#0ea5e9' },
-  fertilizantes:   { categoria: 'nutriente', fase: 'Nutrição Líquida',    acento: '#d4a843' },
-  adubos:          { categoria: 'emenda',    fase: 'Adubo Orgânico',      acento: '#b45309' },
-  minerais:        { categoria: 'mineral',   fase: 'Insumo Mineral',      acento: '#a855f7' },
-};
+export const dynamic = 'force-dynamic';
 
 function formatarProdutoSupabase(p: any): Product {
-  const info = INFO_CATEGORIA_MAP[p.category] || { categoria: 'substrato', fase: 'Produto', acento: '#22c55e' };
-  
   const sortedVariants = p.variants
     ? [...p.variants].sort((a: any, b: any) => {
         const wA = Number(a.weight || 0);
@@ -33,14 +24,23 @@ function formatarProdutoSupabase(p: any): Product {
         return Number(a.price || 0) - Number(b.price || 0);
       })
     : [];
-
   const disponiveis = sortedVariants.filter((v: any) => Number(v.stock) > 0);
   const base = disponiveis.length > 0 ? disponiveis : sortedVariants;
   const maisBarata = base.length > 0 ? base[0] : { price: 0, originalPrice: 0 };
   const estoqueTotal = sortedVariants.reduce((acc: number, v: any) => acc + (Number(v.stock) || 0), 0);
 
+  const INFO_CATEGORIA_MAP: Record<string, { categoria: Product['categoria']; fase: string; acento: string }> = {
+    substratos:      { categoria: 'substrato', fase: 'Substrato',           acento: '#22c55e' },
+    condicionadores: { categoria: 'substrato', fase: 'Aeração & Drenagem',  acento: '#0ea5e9' },
+    fertilizantes:   { categoria: 'nutriente', fase: 'Nutrição Líquida',    acento: '#d4a843' },
+    adubos:          { categoria: 'emenda',    fase: 'Adubo Orgânico',      acento: '#b45309' },
+    minerais:        { categoria: 'mineral',   fase: 'Insumo Mineral',      acento: '#a855f7' },
+  };
+
+  const info = INFO_CATEGORIA_MAP[p.category] || { categoria: 'substrato', fase: 'Produto', acento: '#22c55e' };
+
   return {
-    id: p.id,
+    id: String(p.id),
     name: p.name,
     nome: p.name,
     slug: p.slug,
@@ -55,17 +55,13 @@ function formatarProdutoSupabase(p: any): Product {
     images: p.images || [],
     imagens: p.images || [],
     variants: sortedVariants.map((v: any) => ({
-      id: v.id,
+      id: String(v.id || v.size),
       size: v.size,
       price: Number(v.price || 0),
       originalPrice: Number(v.originalPrice || 0),
       stock: Number(v.stock || 0),
       weight: Number(v.weight || 0),
-      dimensions: {
-        height: Number(v.dimensions?.height || v.height || 10),
-        width: Number(v.dimensions?.width || v.width || 20),
-        length: Number(v.dimensions?.length || v.length || 30),
-      },
+      dimensions: v.dimensions || { height: v.height || 10, width: v.width || 20, length: v.length || 30 },
     })),
     preco: Number(maisBarata.price || 0),
     precoOriginal: Number(maisBarata.originalPrice || 0),
@@ -80,27 +76,30 @@ function CatalogoContent() {
   const searchParams = useSearchParams();
   const catUrl = searchParams.get('cat');
 
-  const [listaProdutos, setListaProdutos] = useState<Product[]>(fallbackProdutos as Product[]);
+  const [listaProdutos, setListaProdutos] = useState<Product[]>(fallbackProducts as Product[]);
   const [categoriaAtiva, setCategoriaAtiva] = useState<string>(catUrl || 'todos');
   const [busca, setBusca] = useState('');
   const [adicionadoId, setAdicionadoId] = useState<string | null>(null);
   const [variantesSelecionadas, setVariantesSelecionadas] = useState<Record<string, string>>({});
   const { addToCart } = useCartStore();
 
+  // 🟢 REGISTRA VISITA À PÁGINA DE PRODUTOS
   useEffect(() => {
-    if (catUrl) {
-      setCategoriaAtiva(catUrl);
+    try {
+      trackEvent('VISIT');
+    } catch (err) {
+      console.warn('Erro ao registrar visita:', err);
     }
-  }, [catUrl]);
+  }, []);
 
-  // 🟢 BUSCA PRODUTOS EM TEMPO REAL DIRETO DO SUPABASE
+  // 🟢 BUSCA PRODUTOS VIVOS DO SUPABASE
   useEffect(() => {
     async function carregarProdutosDoSupabase() {
       try {
         const res = await fetch('/api/admin/products', { cache: 'no-store' });
         if (!res.ok) return;
         const data = await res.json();
-        if (data.ok && Array.isArray(data.products)) {
+        if (data.ok && Array.isArray(data.products) && data.products.length > 0) {
           const formatados = data.products.map(formatarProdutoSupabase);
           setListaProdutos(formatados);
         }
@@ -110,6 +109,12 @@ function CatalogoContent() {
     }
     carregarProdutosDoSupabase();
   }, []);
+
+  useEffect(() => {
+    if (catUrl) {
+      setCategoriaAtiva(catUrl);
+    }
+  }, [catUrl]);
 
   const buscaLower = busca.toLowerCase();
 
@@ -130,8 +135,29 @@ function CatalogoContent() {
     return primeiraDisponivel || (p.variants?.at(0) as ProductVariant);
   };
 
-  const handleSelecionarVariante = (produtoId: string, varianteId: string) => {
-    setVariantesSelecionadas((prev) => ({ ...prev, [produtoId]: varianteId }));
+  const handleSelecionarVariante = (p: Product, varianteId: string) => {
+    setVariantesSelecionadas((prev) => ({ ...prev, [p.id]: varianteId }));
+    // 🟢 RASTREIA CLIQUE/SELEÇÃO DE VARIAÇÃO NO PRODUTO
+    try {
+      trackEvent('PRODUCT_CLICK', {
+        productId: String(p.id),
+        productName: p.nome,
+      });
+    } catch (err) {
+      console.warn('Erro ao registrar clique de produto:', err);
+    }
+  };
+
+  const handleCliqueCard = (p: Product) => {
+    // 🟢 RASTREIA CLIQUE NO CARD/TÍTULO DO PRODUTO
+    try {
+      trackEvent('PRODUCT_CLICK', {
+        productId: String(p.id),
+        productName: p.nome,
+      });
+    } catch (err) {
+      console.warn('Erro ao registrar clique de produto:', err);
+    }
   };
 
   const handleComprar = (p: Product, variante: ProductVariant) => {
@@ -139,8 +165,8 @@ function CatalogoContent() {
 
     addToCart({
       id: `${p.id}-${variante.id || variante.size}`,
-      productId: p.id,
-      variantId: variante.id || variante.size,
+      productId: String(p.id),
+      variantId: String(variante.id || variante.size),
       name: p.nome,
       size: variante.size,
       price: variante.price,
@@ -148,7 +174,7 @@ function CatalogoContent() {
       quantity: 1,
       weight: variante.weight,
       dimensions: variante.dimensions,
-      image: p.imagens.at(0) || '',
+      image: p.imagens?.at(0) || '',
     });
 
     setAdicionadoId(`${p.id}-${variante.id || variante.size}`);
@@ -213,10 +239,9 @@ function CatalogoContent() {
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(250px, 1fr))', gap: 18 }}>
           {produtosFiltrados.map((p) => {
             const variante = getVarianteAtiva(p);
-            const variantKey = variante?.id || variante?.size || 'default';
-            const isAdded = adicionadoId === `${p.id}-${variantKey}`;
+            const isAdded = adicionadoId === `${p.id}-${variante?.id || variante?.size}`;
             const emEstoque = variante ? variante.stock > 0 : false;
-            const desconto = (variante && variante.originalPrice > variante.price)
+            const desconto = variante && variante.originalPrice > variante.price
               ? Math.round((1 - variante.price / variante.originalPrice) * 100)
               : 0;
 
@@ -234,7 +259,11 @@ function CatalogoContent() {
                   boxShadow: '0 4px 12px rgba(0,0,0,0.03)',
                 }}
               >
-                <div>
+                {/* 🟢 CARD COM RASTREAMENTO DE CLIQUE NO PRODUTO */}
+                <div 
+                  onClick={() => handleCliqueCard(p)} 
+                  style={{ color: 'inherit', cursor: 'pointer' }}
+                >
                   <div style={{ height: 160, background: '#f0ece4', display: 'flex', alignItems: 'center', justifyContent: 'center', position: 'relative' }}>
                     <img
                       src={p.imagens?.at(0) || ''}
@@ -261,12 +290,12 @@ function CatalogoContent() {
                       {p.nome}
                     </h3>
                     <p style={{ fontSize: 12, color: '#635b4d', lineHeight: 1.45, margin: 0, minHeight: 36, display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical', overflow: 'hidden' }}>
-                      {p.descricaoCurta}
+                      {p.descricaoCurta || p.descricao}
                     </p>
                   </div>
                 </div>
 
-                {/* SELETOR DE VARIANTES */}
+                {/* SELETOR DE VARIANTES COM RASTREAMENTO */}
                 {p.variants && p.variants.length > 0 && (
                   <div style={{ padding: '4px 16px 8px' }}>
                     <span style={{ fontSize: 10, fontWeight: 800, color: '#9a8e78', textTransform: 'uppercase', letterSpacing: '0.05em', display: 'block', marginBottom: 6 }}>
@@ -274,14 +303,14 @@ function CatalogoContent() {
                     </span>
                     <div style={{ display: 'flex', gap: 5, flexWrap: 'wrap' }}>
                       {p.variants.map((v) => {
-                        const ativo = variante?.id === v.id || variante?.size === v.size;
+                        const ativo = variante?.id === v.id;
                         const semEstoque = v.stock <= 0;
                         return (
                           <button
                             key={v.id || v.size}
                             type="button"
                             disabled={semEstoque}
-                            onClick={() => handleSelecionarVariante(p.id, v.id || v.size)}
+                            onClick={() => handleSelecionarVariante(p, v.id)}
                             title={semEstoque ? 'Tamanho esgotado' : `Selecionar ${v.size}`}
                             style={{
                               padding: '4px 10px',
@@ -311,7 +340,7 @@ function CatalogoContent() {
                     </span>
                     <div style={{ display: 'flex', alignItems: 'baseline', gap: 5 }}>
                       <span style={{ fontSize: 18, fontWeight: 900, color: '#132e13' }}>
-                        R$ {(variante?.price || p.preco || 0).toFixed(2).replace('.', ',')}
+                        R$ {variante ? variante.price.toFixed(2).replace('.', ',') : '0,00'}
                       </span>
                       {desconto > 0 && variante && (
                         <span style={{ fontSize: 11, color: '#a89d89', textDecoration: 'line-through' }}>
